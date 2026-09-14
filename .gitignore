@@ -10,3 +10,8 @@ dist/
 .DS_Store
 coverage.out
 *.coverprofile
+/cqb
+__pycache__/
+*.py[cod]
+openspec/**/*.html
+

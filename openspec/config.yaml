@@ -1,0 +1,45 @@
+schema: spec-driven
+
+context: |
+  Language: en. All OpenSpec artifacts in this repo are English (SHALL/MUST
+  headings included). This repository is a generic Go kit and will be public.
+
+  CQB is a local quality gate plus a Cursor code-review slash. It vendors an
+  engine into the consuming Go repo, installs host tools (golangci-lint,
+  gremlins) via `go install`, and never replaces that repo's own skills or
+  path-scoped rules.
+
+  Constitution (not YAML-overridable): measure the git diff, not the whole
+  module; absolute complexity only on new functions; legacy is delta and
+  yellow; yellow never fails git; red is an allowlist (empty until the human
+  names a scope); the agent is not the git exit code; hook is opt-in.
+
+  Public-safety: never name a private employer, client, product, ticket, or
+  internal path. Examples MUST be invented generic Go (e.g. internal/billing).
+
+rules:
+  proposal:
+    - Always include Non-goals.
+    - Output this artifact as proposal.md only. Do not write HTML here.
+    - Do not mention private employers, clients, or copied application paths.
+  specs:
+    - Scenarios in WHEN/THEN. Use generic Go examples only.
+    - Output spec.md files only. Do not write HTML here.
+  design:
+    - Explain the CLI vs Cursor slash split, vendor copy vs host tools, and
+      which knobs YAML may change versus constitution.
+    - Output design.md only. Do not write HTML here.
+  tasks:
+    - Tasks for the kit itself (engine, CLI, review, init/setup, tests).
+      Do not task a cutover of some other company's service.
+    - Output tasks.md only.
+
+operations:
+  apply:
+    guidance:
+      - Do not copy source from another private repository. Invent generic
+        Go fixtures for tests.
+      - Do not enable a always-on git hook. Do not make yellow fail git.
+  archive:
+    guidance:
+      - Short summary. HTML review copies are disposable.

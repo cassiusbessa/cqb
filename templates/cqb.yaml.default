@@ -1,0 +1,32 @@
+# CQB consumer config.
+# Constitution (not overridable): diff-only, new-func absolute complexity,
+# legacy is delta, yellow never fails git, empty red allowlist until a human
+# names a scope, hook is opt-in, the agent is not the git exit code.
+#
+# Nested module: set prefix (or prefixes, most-specific first). Globs in
+# globs.txt / testable / red_allowlist may be written relative to that module
+# (internal/...) even when git paths are services/billing/internal/....
+kit_version: "0.1.0"
+prefix: ""
+operator_language: "pt-BR"
+complexity:
+  cognitive: 30
+  cyclomatic: 30
+  nested_if: 5
+  delta: 5
+red_allowlist: []
+testable:
+  include:
+    - "internal/"
+  exclude:
+    - "internal/interface/"
+io_imports:
+  - "database/sql"
+  - "net/http"
+  - "os"
+extra_hunters: []
+e2e:
+  catalog_root: "internal/e2e"
+cover:
+  io_floor: 80
+  baseline_path: ".cqb/cover-baseline.json"

@@ -1,0 +1,9 @@
+#!/bin/sh
+# CQB opt-in pre-push hook.
+# Init never sets core.hooksPath. To attach:
+#   git config core.hooksPath .cqb/hooks
+# This script is a no-op unless the documented environment flag is set.
+if [ -z "$CQB" ]; then
+  exit 0
+fi
+exec cqb run --mode push

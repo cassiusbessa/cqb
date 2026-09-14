@@ -1,0 +1,40 @@
+---
+name: cqb-bundle-reader
+description: >-
+  Read .quality/last.json for this consumer. Ceilings and allowlist are
+  interpolated from cqb.yaml so this prose cannot drift.
+---
+
+# Bundle reader
+
+Operator language: pt-BR. Do not paste the raw JSON.
+
+## Colors
+
+Each slot is `red` | `yellow` | `skip` | `unavailable` | `green`.
+
+- **red** — git exit 1 (gofmt/vet/build; broken e2e catalog; allowlist cover/hunters).
+- **yellow** — never fails git. Complexity over ceiling, missing quick tests outside the allowlist, surviving mutants, hunters outside the allowlist.
+- **skip** — not applicable (prefix miss, empty allowlist cover, no matching e2e suite). Not a pass.
+- **unavailable** — tool missing (python3, docker, gremlins). Not a pass, never green.
+
+`has_red` is true only when at least one slot is red. Yellow MUST NOT set `has_red`.
+
+## Ceilings (from cqb.yaml)
+
+- cognitive: **{{cognitive}}**
+- cyclomatic: **{{cyclomatic}}**
+- nested-if: **{{nested_if}}**
+- legacy delta: **{{delta}}**
+
+Exceeding a ceiling on a **new** function is yellow, never red. Legacy body edits use delta, not historical absolute complexity.
+
+## Red allowlist
+
+{{red_allowlist}}
+
+Empty allowlist: no cover red, no hunter red. Hygiene (gofmt/vet/build) may still be red.
+
+## Verification-gap
+
+Wait for `.quality/last.json` **and** the running flag to disappear. Treat `skip` and `unavailable` as not executed.
