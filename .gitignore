@@ -1,0 +1,12 @@
+.quality/
+*.env
+.env.*
+!.env.example
+bin/
+dist/
+*.exe
+.idea/
+.vscode/
+.DS_Store
+coverage.out
+*.coverprofile

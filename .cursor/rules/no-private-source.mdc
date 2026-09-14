@@ -1,0 +1,16 @@
+---
+description: This repo will be public. Never copy employer or client source.
+alwaysApply: true
+---
+
+# Public repo — no private source
+
+CQB is a generic Go quality-gate kit. It will be published on GitHub.
+
+Never add files, snippets, paths, credentials, or domain language taken
+from a private employer or client repository. No `.env`, no compose with
+real passwords, no copied services, no ticket IDs, no customer names.
+
+Examples in this repo must be generic Go (a fake `internal/billing` or
+similar invented for the kit). If a change only makes sense inside one
+company's product, it does not belong here.
