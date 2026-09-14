@@ -46,6 +46,7 @@ type Config struct {
 	Prefixes         []string   `yaml:"prefixes"`
 	OperatorLanguage string     `yaml:"operator_language"`
 	Complexity       Complexity `yaml:"complexity"`
+	StrictPaths      []string   `yaml:"strict_paths"`
 	RedAllowlist     []string   `yaml:"red_allowlist"`
 	Testable         Testable   `yaml:"testable"`
 	IOImports        []string   `yaml:"io_imports"`
@@ -60,6 +61,7 @@ func defaults() Config {
 		KitVersion:       "0.1.0",
 		OperatorLanguage: "pt-BR",
 		Complexity:       Complexity{Cognitive: 30, Cyclomatic: 30, NestedIf: 5, Delta: 5},
+		StrictPaths:      []string{},
 		RedAllowlist:     []string{},
 		Testable: Testable{
 			Include: []string{"internal/"},
@@ -84,6 +86,7 @@ func Parse(text []byte) (Config, error) {
 		}
 	}
 	cfg.IgnoredKeys = collectIllegal(raw)
+	applyStrictPaths(&cfg, raw)
 	if cfg.Complexity.Cognitive == 0 {
 		cfg.Complexity.Cognitive = 30
 	}
@@ -95,6 +98,9 @@ func Parse(text []byte) (Config, error) {
 	}
 	if cfg.Complexity.Delta == 0 {
 		cfg.Complexity.Delta = 5
+	}
+	if cfg.StrictPaths == nil {
+		cfg.StrictPaths = []string{}
 	}
 	if cfg.RedAllowlist == nil {
 		cfg.RedAllowlist = []string{}
@@ -114,6 +120,35 @@ func Load(path string) (Config, error) {
 		return Config{}, err
 	}
 	return Parse(b)
+}
+
+func applyStrictPaths(cfg *Config, raw map[string]any) {
+	if _, ok := raw["strict_paths"]; ok {
+		cfg.StrictPaths = stringSlice(raw["strict_paths"])
+		return
+	}
+	if _, ok := raw["red_allowlist"]; ok {
+		cfg.StrictPaths = stringSlice(raw["red_allowlist"])
+	}
+}
+
+func stringSlice(v any) []string {
+	switch t := v.(type) {
+	case nil:
+		return []string{}
+	case []any:
+		out := make([]string, 0, len(t))
+		for _, x := range t {
+			if s, ok := x.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	case []string:
+		return t
+	default:
+		return []string{}
+	}
 }
 
 func PrefixList(c Config) []string {

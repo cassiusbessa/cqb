@@ -114,7 +114,14 @@ def _git(root: Path, *args: str) -> str:
     return r.stdout
 
 
-def collect_files(root: Path, mode: str, explicit: list[str] | None = None) -> list[str]:
+def _merge_base(root: Path, base: str) -> str:
+    if not base:
+        return "HEAD"
+    mb = _git(root, "merge-base", "HEAD", base).strip()
+    return mb or base
+
+
+def collect_files(root: Path, mode: str, explicit: list[str] | None = None, base: str = "") -> list[str]:
     root = root.resolve()
     names: list[str] = []
     if mode == "file-list":
@@ -127,6 +134,17 @@ def collect_files(root: Path, mode: str, explicit: list[str] | None = None) -> l
         if not out.strip():
             out = _git(root, "diff", "--name-only", "HEAD")
         names = out.splitlines()
+    elif mode == "review":
+        mb = _merge_base(root, base)
+        names = _git(root, "diff", "--name-only", mb).splitlines()
+        porcelain = _git(root, "status", "--porcelain", "-u")
+        for line in porcelain.splitlines():
+            if len(line) < 4:
+                continue
+            path = line[3:]
+            if " -> " in path:
+                path = path.split(" -> ", 1)[1]
+            names.append(path)
     else:  # uncommitted: working tree vs HEAD including untracked
         names = _git(root, "diff", "--name-only", "HEAD").splitlines()
         names += _git(root, "diff", "--cached", "--name-only").splitlines()

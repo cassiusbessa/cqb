@@ -23,8 +23,8 @@ extra_hunters: []
 	if cfg.Complexity.Cognitive != 30 || cfg.Complexity.Cyclomatic != 30 || cfg.Complexity.NestedIf != 5 {
 		t.Fatalf("ceilings: %+v", cfg.Complexity)
 	}
-	if len(cfg.RedAllowlist) != 0 {
-		t.Fatalf("allowlist should be empty, got %v", cfg.RedAllowlist)
+	if len(cfg.StrictPaths) != 0 {
+		t.Fatalf("strict paths should be empty, got %v", cfg.StrictPaths)
 	}
 }
 
@@ -42,5 +42,45 @@ complexity:
 	}
 	if len(cfg.IgnoredKeys) < 4 {
 		t.Fatalf("expected illegal keys ignored, got %v", cfg.IgnoredKeys)
+	}
+}
+
+func TestStrictPathsWinsOverAlias(t *testing.T) {
+	cfg, err := config.Parse([]byte(`
+red_allowlist:
+  - "internal/billing/**"
+strict_paths: []
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.StrictPaths) != 0 {
+		t.Fatalf("strict_paths must win including empty, got %v", cfg.StrictPaths)
+	}
+}
+
+func TestRedAllowlistAlias(t *testing.T) {
+	cfg, err := config.Parse([]byte(`
+red_allowlist:
+  - "internal/billing/**"
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.StrictPaths) != 1 || cfg.StrictPaths[0] != "internal/billing/**" {
+		t.Fatalf("alias should load into StrictPaths, got %v", cfg.StrictPaths)
+	}
+}
+
+func TestStrictPathsKey(t *testing.T) {
+	cfg, err := config.Parse([]byte(`
+strict_paths:
+  - "internal/billing/**"
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.StrictPaths) != 1 || cfg.StrictPaths[0] != "internal/billing/**" {
+		t.Fatalf("strict_paths: %v", cfg.StrictPaths)
 	}
 }

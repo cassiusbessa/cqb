@@ -3,15 +3,14 @@
 [English](README.md)
 
 O CQB é um **portão de qualidade local** para código Go. Ele olha só o que
-você mudou no git, escreve um **relatório** em `.quality/last.json` e,
-se você quiser, um comando no chat do Cursor (`/cqb`) lê esse relatório
-na revisão.
+você mudou no git, grava um relatório em `.quality/last.json` e, na revisão
+no Cursor, o comando `/cqb` **roda o portão e explica o relatório**.
 
-Na primeira instalação ele **não impede o push** por teste fraco ou
-cobertura. Isso só acontece depois que você aponta pastas específicas
-(a *allowlist* — explicada mais abaixo).
+Na primeira instalação ele **não impede o push** por teste unitário fraco
+ou cobertura baixa. Isso só acontece depois que você aponta pastas na
+**lista de rigor** (explicada mais abaixo).
 
-Precisa só de Go 1.22+, `python3`, `git` e `gofmt`/`go`.
+Precisa de Go 1.22+, `python3`, `git` e `gofmt`/`go`.
 
 ---
 
@@ -30,10 +29,10 @@ Se o que você alterou cruzar com uma suíte de testes de jornada (e2e),
 pode rodar esses testes — em geral eles precisam de Docker.
 
 - Sai **0** na maioria das vezes: o relatório existe para você (e para o
-  `/cqb`) ler, não para travar o git.
-- Sai **1** de cara só se `gofmt`, `go vet` ou `go build` falharam, ou se
-  uma suíte e2e que *deveria* rodar quebrou. Falta de teste unitário **não**
-  derruba o git nesta fase.
+  `/cqb`) ler. Amarelo nunca muda esse código de saída.
+- Sai **1** só se alguma verificação ficou **vermelha**: em geral `gofmt`,
+  `go vet`, `go build`, ou e2e que rodou e falhou. Falta de teste unitário
+  **não** derruba o git enquanto a lista de rigor estiver vazia.
 
 Não aponte o dia a dia para `@latest`. Pin a tag; quando quiser atualizar:
 
@@ -51,39 +50,42 @@ binário.
 
 ```
 seu-repo/
-  cqb.yaml              regras *suas* (prefixo, allowlist, tetos…). o init
-                        só cria se o arquivo ainda não existir
+  cqb.yaml              *seu* arquivo de configuração (prefixo, lista de
+                        rigor, tetos…). o init só cria se ainda não existir
   .cqb/
     engine/             cópia do motor (Python) usada pelo `cqb run`
     templates/          modelos de skills e do hook
-    hooks/pre-push      script de hook; **não** está ligado ao git ainda
-    scan.json           inventário automático (quantos testes, pastas e2e)
-    work/               arquivos temporários (cover); ignorado pelo git
+    hooks/pre-push      script de hook (só trabalha com CQB=1)
+    scan.json           inventário (quantos testes, pastas e2e)
+    work/               temporários; ignorado pelo git
   .quality/             relatórios (`last.json`); ignorado pelo git
-  .gitignore            o init acrescenta um bloco `# cqb begin` … `# cqb end`
+  .gitignore            bloco `# cqb begin` … `# cqb end`
 ```
 
 O git **deve** versionar `cqb.yaml`, `.cqb/engine`, `.cqb/hooks` e
 `.cqb/templates`. O init **não** ignora esses paths. Ele ignora lixo de
 execução: `.quality/`, `scan.json`, `work/`, `*.coverprofile`.
 
-`scan.json` não é configuração. É um retrato do repo na hora do init
-(módulo Go, densidade de `*_test.go`, pastas que já têm `globs.txt` de
-e2e). O comando `/cqb-setup` usa isso para *sugerir* pastas; você decide.
+`scan.json` não é configuração. É um retrato na hora do init. O
+`/cqb-setup` usa isso para *sugerir* pastas; você decide.
 
-Às vezes o scan encontra **uma** pasta que já tem testes de jornada
-(e2e), por exemplo `services/billing/internal/e2e`. Aí o `cqb.yaml` novo
-anota esse caminho em `e2e.catalog_root` — só para o CQB saber onde
-procurar as suítes. Isso **não** escolhe pastas que bloqueiam o push.
-Prefixo do monorepo e allowlist **continuam vazios** até você preencher
-— ver [Quando o repo não é um módulo só](#quando-o-repo-não-é-um-módulo-só)
-e [Allowlist](#allowlist-onde-o-amarelo-pode-virar-vermelho).
+**Quando o init preenche `e2e.catalog_root`?** Ele procura pastas que já
+tenham testes de jornada. Encontrou **exatamente uma** (ex.:
+`services/billing/internal/e2e`) → anota esse caminho no `cqb.yaml`
+**novo**, só para saber onde procurar suítes. Zero pastas, ou duas ou
+mais → deixa o campo em paz; não escolhe por você. Isso **não** preenche
+a lista de rigor nem o prefixo.
+
+Se o init viu `core.hooksPath` vazio neste repositório, ele aponta o git
+local para `.cqb/hooks`. Se você já tinha outro valor (husky, etc.), ele
+não sobrescreve. Em qualquer caso o hook **só roda o CQB** quando você
+exporta `CQB=1` naquele push.
 
 ---
 
 ## Cores no relatório
 
-Cada parte do relatório (lint, testes, e2e, cobertura…) ganha uma cor:
+Cada parte (lint, testes, e2e, cobertura…) ganha uma cor:
 
 | Cor | O git | Significado |
 |---|---|---|
@@ -91,23 +93,23 @@ Cada parte do relatório (lint, testes, e2e, cobertura…) ganha uma cor:
 | amarelo | segue | Aviso para a revisão. **Nunca** faz o `cqb run` sair 1. |
 | vermelho | **para** (`cqb run` sai 1) | Problema que o CQB trata como bloqueio. |
 | skip | segue | Não se aplica a este diff. Não é “passou”. |
-| unavailable | segue no dia a dia | Faltou ferramenta (Docker, gremlins). Não é “passou”. |
+| unavailable | segue | Faltou ferramenta (Docker, gremlins). Não é “passou”. |
 
-O `cqb run` sai 1 quando **algum** item está vermelho.
-
-Exceção do hook (opcional, no fim deste guia): se você ligar o hook e
-fizer `CQB=1 git push`, e2e `unavailable` com suíte que *deveria* ter
-rodado também sai 1 — em geral Docker fora do `PATH`.
+O `cqb run` sai 1 quando **algum** item está vermelho — no terminal, no
+`--mode push` e no hook com `CQB=1`. Docker ausente com suíte que
+*deveria* ter rodado fica `unavailable` e **não** vira vermelho sozinho.
+E2e que rodou e falhou o assert, ou `globs.txt` quebrado, continuam
+vermelhos.
 
 ---
 
 ## O que o CQB verifica
 
-Só entra o que está no **diff** (e, se você configurou, dentro do
-`prefix`). Não varre o módulo inteiro.
+Só entra o que está no **diff** (e, se você configurou `prefix` no
+`cqb.yaml`, só dentro dessa pasta). Não varre o módulo inteiro.
 
 **Higiene (lint)** — `gofmt`, `go vet`, `go build` nos pacotes dos `.go`
-que mudaram. Falhou → vermelho, **mesmo com allowlist vazia**.
+que mudaram. Falhou → vermelho, **mesmo com lista de rigor vazia**.
 
 **Complexidade** — funções **novas** acima dos tetos (30 cognitivo, 30
 ciclomático, 5 `if` aninhados) ficam **amarelas**. Função antiga: só o
@@ -115,72 +117,70 @@ ciclomático, 5 `if` aninhados) ficam **amarelas**. Função antiga: só o
 
 **Teste rápido** — para uma função **nova** `Foo` em pasta “testável”
 (padrão: `internal/`, fora de `internal/interface/`): existe um
-`TestFoo` **e** o corpo do teste **chama** `Foo(`? Se falta nome ou
-falta a chamada → aviso. Isso *não* é “percentual de cobertura” e *não*
-é o `go test` da suíte e2e. Handlers HTTP (`http.ResponseWriter`) ficam
-de fora. Com allowlist vazia isso é **amarelo**; na allowlist vira
-**vermelho**.
+`TestFoo` **e** o corpo do teste **chama** `Foo(`? Se falta o teste ou a
+chamada → aviso. Isso *não* é percentual de cobertura e *não* é o
+`go test` da suíte e2e. Handlers HTTP (`http.ResponseWriter`) ficam de
+fora. Lista de rigor vazia → **amarelo**; path na lista → **vermelho**.
 
-**Checagens de qualidade no `*_test.go` (hunters)** — padrões frágeis,
-por exemplo:
+**Checagens no `*_test.go` (hunters)** — padrões frágeis, por exemplo:
 
-- `t.Fatal("falhou")` sem dizer o valor obtido e o esperado (cego)
+- `t.Fatal("falhou")` sem mostrar o valor obtido e o esperado
 - dois asserts na mesma linha
 - `time.Now` / `rand` no teste
 - comparação nova na **produção** (`n > 10`, `len(x) == 0`) cujo número
   não aparece em nenhum teste do pacote
 
-Com allowlist vazia: amarelo. Na allowlist: vermelho.
+Lista vazia: amarelo. Path na lista: vermelho.
 
 **E2e** — se o diff casa o `globs.txt` de uma suíte, o CQB roda
 `go test -tags e2e` naquela pasta. Passou → verde. Assert falhou →
-vermelho. Sem Docker e a suíte foi implicada → `unavailable`. Isso **não**
-é a allowlist: implicar Docker não bloqueia push por falta de `TestFoo`.
+vermelho. Sem Docker e a suíte foi pedida → `unavailable`. Isso **não** é
+a lista de rigor: implicar Docker não bloqueia push por falta de
+`TestFoo`.
 
-**Cobertura (cover)** — percentual de linhas exercitadas pelos testes
-unitários, **só** quando a allowlist tem itens **e** o diff toca `.go` de
-produção que casam. Sem allowlist o item fica `skip` (nem roda). Helper
-puro sem `Foo(` no teste → vermelho. Arquivo que fala com banco/HTTP
-abaixo de 80% → vermelho. O CQB **não** reescreve o arquivo de baseline
-no `cqb run`.
+**Cobertura** — percentual de código exercitado pelos testes unitários,
+nos pacotes dos `.go` de produção que estão no diff. **Roda mesmo com a
+lista de rigor vazia** (aí o aviso fica amarelo). Só pode ficar vermelho
+— e parar o git — nos paths da lista. Sem `.go` de produção no diff →
+`skip`. O CQB **não** reescreve o arquivo de baseline no `cqb run`.
 
 **Mutação** — opcional (gremlins), só se a função nova já tem teste que
 a invoca. Mutante que sobrevive → amarelo, nunca vermelho no v0.1.
 
 ---
 
-## Allowlist: onde o amarelo pode virar vermelho
+## Lista de rigor (`strict_paths`)
 
-A `red_allowlist` no `cqb.yaml` é uma lista de **padrões de path** (globs).
-Ela **não** é lista do que o CQB ignora.
+No `cqb.yaml` a chave é `strict_paths` (o nome antigo `red_allowlist`
+ainda é lido). Não é “permissão” e **não** é lista do que o CQB ignora.
 
-- Path **dentro** de um glob → teste rápido, hunters e cobertura **podem**
-  ficar vermelhos e o `cqb run` **pode sair 1**.
-- Path **fora**, ou lista `[]` → esses mesmos avisos ficam amarelos (ou
-  cobertura `skip`) e **não** derrubam o git.
+Você **nomeia as pastas em que um aviso pode parar o push**. Não é o
+conjunto de tudo que você quer testar. Não é lista do que fica de fora:
+o que não está na lista ainda é checado; só não fica vermelho.
 
 ```yaml
-red_allowlist: []          # padrão após o init: nada disso é vermelho
+# em cqb.yaml
+strict_paths: []                 # padrão: avisos de teste/cobertura não param o git
 
-red_allowlist:
-  - "internal/billing/**"  # daqui pra frente, teste fraco *nessa* pasta pode bloquear o push
+strict_paths:
+  - "internal/billing/**"        # nesta pasta, teste fraco / cobertura baixa PODE sair 1
 ```
+
+Um **glob** é um padrão de path. `internal/billing/**` = tudo debaixo
+dessa pasta. `*invoice*` = path que contém `invoice`. Você **não** precisa
+listar o módulo inteiro. Comece vazio; acrescente só o recorte que o time
+quer tratar como bloqueio.
 
 Não cole `internal/` “por garantia”: aí **qualquer** helper novo em
 `internal/` passa a poder falhar o git.
 
-A allowlist **não** é “só percentual de cobertura”. Cobertura é um dos
-avisos. Nesses paths também podem ficar vermelhos: função nova sem teste
-que a chama; `t.Fatal` que não mostra o valor obtido e o esperado; os
-outros hunters da seção acima.
-
 Ainda podem ser vermelhos **com lista vazia**: higiene (`gofmt`/`vet`/`build`)
 e e2e que rodou e quebrou (ou catálogo `globs.txt` inválido).
 
-**Não confundir com `globs.txt` de e2e.** Esse arquivo só responde “devo
-rodar a suíte de integração?”. A allowlist responde “neste path, aviso
-de teste unitário pode impedir o push?”. Os textos podem ser iguais; as
-perguntas não são.
+**Não confundir com `globs.txt` de e2e.** Esse arquivo responde “devo
+**rodar** esta suíte de jornada?”. A lista de rigor responde “neste path,
+aviso de teste unitário / cobertura pode **impedir o push**?”. Os textos
+podem ser iguais; as perguntas não são.
 
 ---
 
@@ -190,42 +190,51 @@ O CQB nunca olha o repo inteiro. O `--mode` diz **qual diff**.
 
 | Comando | O que entra |
 |---|---|
-| `cqb run` | Alterado ou novo desde o `HEAD` (inclui untracked). Dia a dia. |
+| `cqb run` | Alterado ou novo desde o `HEAD` (inclui untracked). Dia a dia no terminal. |
 | `cqb run --mode staged` | Só o que está no `git add` (o próximo commit). |
 | `cqb run --mode push` | Diff contra o upstream (`git push`). É o que o hook chama. |
+| `cqb run --mode review` | Commits desde o merge-base da branch base **mais** o working tree. É o que o `/cqb` chama. |
 | `cqb run --mode file-list --files a.go,b.go` | Só esses paths. Útil para debugar um arquivo. |
+
+`--mode review` escolhe a base assim: branch de *upstream* se existir;
+senão `main` **ou** `master` se só um dos dois existir. Se os dois
+existirem (ou nenhum), o comando **para e pede** `--base <ref>` — não
+adivinha. O `/cqb` faz a mesma pergunta a você.
 
 `--output` (padrão `.quality/last.json`) é só o caminho do relatório.
 
 ---
 
-## Comandos no Cursor (opcional)
+## Comandos no Cursor
 
 No chat do Cursor, uma linha que começa com `/` dispara um fluxo do
-agente. O CQB traz dois. Nenhum substitui o `cqb run` no terminal.
+agente. O CQB traz dois.
+
+**`/cqb`** — revisão de código. Escolhe o diff (`--mode review`, a menos
+que você peça só o working tree), **roda `cqb run`**, espera o
+`.quality/last.json` e escreve em português o que corrigir. Você não
+precisa rodar o CLI antes. Não cole o JSON no chat.
 
 **`/cqb-setup`** — primeira configuração guiada. Instala o CLI se faltar,
 roda `cqb init`, lê o `scan.json` e **pergunta** se alguma pasta sugerida
-(em geral as que já têm suíte e2e) deve entrar na allowlist. Sem o seu
-“sim”, a lista permanece vazia: o gate continua só avisando (amarelo),
+(em geral as que já têm suíte e2e) deve entrar na lista de rigor. Sem o
+seu “sim”, a lista permanece vazia: o gate continua avisando (amarelo),
 sem bloquear push por teste unitário. O agente **não conhece** o seu
-produto e **não escolhe sozinho** a pasta que deve bloquear o push. Se a
-sugestão for ruim, diga não.
-
-**`/cqb`** — revisão de código. Junta o diff, se o diff tocar o `prefix`
-sobe um `cqb run` em segundo plano, espera o `.quality/last.json` e
-escreve o que corrigir. Não cole o JSON no chat. O idioma da prosa
-padrão é pt-BR.
+produto e **não escolhe sozinho** a pasta que deve bloquear o push.
 
 Skills do kit só são copiadas se o arquivo **ainda não existir** no seu
 `.cursor/`. As rules de domínio que você já tem continuam valendo.
 
 ---
 
-## Quando o repo não é um módulo só
+## O arquivo `cqb.yaml`
+
+Toda configuração mora **neste arquivo** na raiz do git (ou no path que
+você passou ao `cqb run`). Não é variável de ambiente.
 
 Se o git mostra `services/billing/internal/foo.go` mas os testes e o
-`globs.txt` falam `internal/foo.go`, diga ao CQB onde o módulo mora:
+`globs.txt` falam `internal/foo.go`, o módulo Go não é a raiz do git.
+Aí você preenche o prefixo **no `cqb.yaml`**:
 
 ```yaml
 prefix: "services/billing"
@@ -233,17 +242,23 @@ prefix: "services/billing"
 
 Sem isso, o padrão `internal/` não enxerga `services/billing/internal/...`.
 
-Vários módulos: o path mais específico primeiro, em `prefixes`.
+Vários módulos: o path mais específico primeiro, na chave `prefixes`.
 
-Confira:  
-`cqb run --mode file-list --files services/billing/internal/billing/normalize.go`  
-não deve dizer que o diff está fora do prefixo, se esse for o seu código.
+Confira com:
+
+```bash
+cqb run --mode file-list --files services/billing/internal/billing/normalize.go
+```
+
+Não deve dizer que o diff está fora do prefixo, se esse for o seu código.
 
 ---
 
-## E2e (`globs.txt`) e cobertura — quando você for usar
+## E2e (`globs.txt`) e tetos — quando você for usar
 
-Cada suíte é uma pasta com `globs.txt`, por exemplo
+Cada suíte é uma pasta com um arquivo `globs.txt`. Esse arquivo lista o
+que **deve disparar** a suíte se aparecer no diff — não o que deve ser
+ignorado. Exemplo
 `services/billing/internal/e2e/invoices/globs.txt`:
 
 ```
@@ -257,37 +272,45 @@ Arquivo SQL sumido → catálogo **vermelho**.
 
 O init **não** inventa suítes. Você (ou o time) cria o `globs.txt`.
 
-Cobertura só roda com allowlist preenchida. Baseline padrão:
-`.cqb/cover-baseline.json`. Se você já tem outro JSON, aponte
-`cover.baseline_path`. Imports que contam como I/O (piso 80%):
+Cobertura: baseline padrão `.cqb/cover-baseline.json`. Se você já tem
+outro JSON, aponte `cover.baseline_path` no `cqb.yaml`. Imports que
+contam como I/O (piso 80% quando o path está na lista de rigor):
 `database/sql`, `net/http`, `os` — dá para estender em `io_imports`.
 
 Tetos de complexidade são **só amarelo**. Handlers com vários
 `if err != nil` costumam querer `cyclomatic` 35; o `/cqb-setup` pode
-*sugerir* isso, não grava sozinho.
+*sugerir* isso e **não grava** no yaml sem o seu sim.
 
 ---
 
-## Hook de git (opt-in)
+## Hook de git
 
-O init **grava** `.cqb/hooks/pre-push` e **não** liga no git. Para ligar:
+Depois do `init`, se o repositório não tinha `core.hooksPath`, o git
+local já aponta para `.cqb/hooks`. O script **não faz nada** até:
 
 ```bash
-git config core.hooksPath .cqb/hooks
-CQB=1 git push          # aí sim roda `cqb run --mode push`
-git push                # sem CQB, o script não faz nada
+CQB=1 git push          # roda `cqb run --mode push`
+git push                # sem CQB, o push segue
 ```
 
-Não coloque `CQB=1` no bashrc: todo push do time passaria a esperar o gate.
+Não coloque `CQB=1` no bashrc: todo push do time passaria a esperar o
+gate. Yaml **não** liga o hook sozinho.
 
 ---
 
-## Constituição (yaml não desfaz)
+## O que o yaml não desfaz
 
-O `cqb.yaml` ajusta tetos, prefixo, allowlist, catálogo e2e. **Não** dá
-para, via yaml, varrer o módulo inteiro, fazer amarelo falhar git, ou
-ligar o hook sozinho. Chaves como `yellow_blocks` são ignoradas
-(`ignored_keys` no relatório).
+O `cqb.yaml` ajusta tetos, prefixo, lista de rigor, catálogo e2e. Ele
+**não** consegue:
+
+- varrer o módulo inteiro “por garantia”
+- fazer amarelo falhar o git
+- exigir `CQB=1` em todo push do time
+- pintar de vermelho teste/cobertura fora da lista de rigor
+
+Chaves como `yellow_blocks` são ignoradas (`ignored_keys` no relatório).
+Isso é de propósito: o time não congela o git por um teto de
+complexidade.
 
 ---
 
@@ -310,21 +333,20 @@ o `/cqb`.
 
 | Termo | Significado aqui |
 |---|---|
-| Relatório / bundle | Arquivo JSON `.quality/last.json` com as cores de cada verificação. |
+| Relatório | JSON `.quality/last.json` com as cores de cada verificação. |
 | Slot | Uma seção desse relatório (lint, teste, e2e, cover…). |
-| Allowlist (`red_allowlist`) | Pastas/globs onde aviso de teste/cobertura **pode** virar vermelho e parar o git. Não é ignore. |
+| Lista de rigor (`strict_paths`) | Globs onde aviso de teste/cobertura **pode** virar vermelho e parar o git. Não é ignore. O yaml antigo `red_allowlist` é o mesmo campo. |
 | Glob | Padrão de path (`internal/billing/**`, `*invoice*`). |
-| Prefixo (`prefix`) | Pasta do módulo Go quando ela não é a raiz do git. |
+| Prefixo (`prefix`) | Pasta do módulo Go, **no `cqb.yaml`**, quando ela não é a raiz do git. |
 | Teste rápido | “Função nova `Foo` tem `TestFoo` que chama `Foo(`?”. Não é e2e nem %. |
 | Hunter | Checagem automática num `*_test.go` ou numa linha nova de produção. |
-| Cover / cobertura | Percentual de código exercitado pelos testes unitários (`go test -cover`). |
+| Cobertura | Percentual exercitado pelos testes unitários (`go test -cover`). |
 | E2e | Teste de jornada (`go test -tags e2e`), em geral com Docker. |
-| `globs.txt` | Lista que decide se o e2e **roda**, não se o unitário é vermelho. |
-| Scan (`scan.json`) | Inventário gerado no init; não é a allowlist. |
-| Hook opt-in | Script de pre-push que só roda o gate se `CQB=1`. |
-| Motor / engine | Python em `.cqb/engine` que de fato monta o relatório. |
-| `/cqb`, `/cqb-setup` | Comandos no **chat do Cursor**, não no terminal. |
-| Consumidor | O repositório Go que instalou o CQB. |
+| `globs.txt` | Lista do que **dispara** o e2e, não do que fica vermelho no unitário. |
+| Scan (`scan.json`) | Inventário gerado no init; não é a lista de rigor. |
+| Hook | Script de pre-push; só analisa se `CQB=1`. |
+| Motor / engine | Python em `.cqb/engine` que monta o relatório. |
+| `/cqb`, `/cqb-setup` | Comandos no **chat do Cursor**. `/cqb` roda o portão e interpreta. |
 | Skip / unavailable | Não rodou / faltou ferramenta. Não interprete como verde. |
 
 ---

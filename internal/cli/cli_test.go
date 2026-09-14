@@ -62,7 +62,13 @@ func TestEmbedHasPlaceholders(t *testing.T) {
 	}
 	s := string(setup)
 	if !strings.Contains(s, "HALT") || !strings.Contains(s, "raising cyclomatic") {
-		t.Fatal("cqb-setup skill must HALT on allowlist and suggest raising cyclo")
+		t.Fatal("cqb-setup skill must HALT on strict paths and suggest raising cyclo")
+	}
+	if strings.Contains(s, "Allowlist") || strings.Contains(s, "allowlist:") {
+		t.Fatal("cqb-setup must not teach allowlist as the product name")
+	}
+	if !strings.Contains(s, "strict_paths") && !strings.Contains(s, "lista de rigor") {
+		t.Fatal("cqb-setup must name strict paths / lista de rigor")
 	}
 }
 
@@ -180,10 +186,9 @@ func TestInitKeepsExistingCatalogRoot(t *testing.T) {
 	}
 }
 
-func TestInitWritesFilesWithoutHooksPath(t *testing.T) {
+func TestInitSetsHooksPathWhenUnset(t *testing.T) {
 	dir := t.TempDir()
 	git(t, dir, "init")
-	before, _ := exec.Command("git", "-C", dir, "config", "--get", "core.hooksPath").CombinedOutput()
 	writeBillingApp(t, dir, "package billing\n\nfunc NormalizeX(s string) string { return s }\n")
 	if _, err := capture(t, func() error { return cli.Run([]string{"init", "--dir", dir}) }); err != nil {
 		t.Fatal(err)
@@ -198,8 +203,15 @@ func TestInitWritesFilesWithoutHooksPath(t *testing.T) {
 			t.Fatalf("missing %s: %v", p, err)
 		}
 	}
-	if _, err := os.Stat(filepath.Join(dir, ".cqb", "hooks", "pre-push")); err != nil {
+	yml, err := os.ReadFile(filepath.Join(dir, "cqb.yaml"))
+	if err != nil {
 		t.Fatal(err)
+	}
+	if !bytes.Contains(yml, []byte("strict_paths:")) {
+		t.Fatalf("new yaml must write strict_paths, got:\n%s", yml)
+	}
+	if bytes.Contains(yml, []byte("red_allowlist:")) {
+		t.Fatalf("new yaml must not write red_allowlist:\n%s", yml)
 	}
 	hook, err := os.ReadFile(filepath.Join(dir, ".cqb", "hooks", "pre-push"))
 	if err != nil {
@@ -208,9 +220,35 @@ func TestInitWritesFilesWithoutHooksPath(t *testing.T) {
 	if !bytes.Contains(hook, []byte("cqb run --mode push")) {
 		t.Fatalf("hook must call cqb run --mode push:\n%s", hook)
 	}
-	after, _ := exec.Command("git", "-C", dir, "config", "--get", "core.hooksPath").CombinedOutput()
-	if string(before) != string(after) {
-		t.Fatalf("core.hooksPath changed: %q -> %q", before, after)
+	got, err := exec.Command("git", "-C", dir, "config", "--local", "--get", "core.hooksPath").CombinedOutput()
+	if err != nil {
+		t.Fatalf("hooksPath: %v %s", err, got)
+	}
+	if strings.TrimSpace(string(got)) != ".cqb/hooks" {
+		t.Fatalf("expected local hooksPath .cqb/hooks, got %q", got)
+	}
+}
+
+func TestInitPreservesExistingHooksPath(t *testing.T) {
+	dir := t.TempDir()
+	git(t, dir, "init")
+	writeBillingApp(t, dir, "package billing\n")
+	if out, err := exec.Command("git", "-C", dir, "config", "--local", "core.hooksPath", ".husky").CombinedOutput(); err != nil {
+		t.Fatalf("set husky: %v %s", err, out)
+	}
+	out, err := capture(t, func() error { return cli.Run([]string{"init", "--dir", dir}) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := exec.Command("git", "-C", dir, "config", "--local", "--get", "core.hooksPath").CombinedOutput()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(string(got)) != ".husky" {
+		t.Fatalf("must not overwrite hooksPath, got %q", got)
+	}
+	if !strings.Contains(out, ".husky") {
+		t.Fatalf("stdout should mention existing path:\n%s", out)
 	}
 }
 
@@ -366,6 +404,75 @@ func TestHookOptIn(t *testing.T) {
 	}
 }
 
+func TestReviewBaseUniqueMain(t *testing.T) {
+	dir := t.TempDir()
+	git(t, dir, "init", "-b", "main")
+	writeBillingApp(t, dir, "package billing\n")
+	git(t, dir, "add", "-A")
+	git(t, dir, "commit", "-m", "init")
+	got, err := cli.ResolveReviewBase(dir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "main" {
+		t.Fatalf("got %q want main", got)
+	}
+}
+
+func TestReviewBaseAmbiguous(t *testing.T) {
+	dir := t.TempDir()
+	git(t, dir, "init", "-b", "main")
+	writeBillingApp(t, dir, "package billing\n")
+	git(t, dir, "add", "-A")
+	git(t, dir, "commit", "-m", "init")
+	git(t, dir, "branch", "master")
+	_, err := cli.ResolveReviewBase(dir, "")
+	if err == nil || !strings.Contains(err.Error(), "--base") {
+		t.Fatalf("expected ambiguous --base error, got %v", err)
+	}
+}
+
+func TestReviewBaseExplicit(t *testing.T) {
+	got, err := cli.ResolveReviewBase(".", "origin/develop")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "origin/develop" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestDefaultRunIncludesUntracked(t *testing.T) {
+	dir := t.TempDir()
+	git(t, dir, "init", "-b", "main")
+	writeBillingApp(t, dir, "package billing\n\nfunc Ok() {}\n")
+	if _, err := capture(t, func() error { return cli.Run([]string{"init", "--dir", dir}) }); err != nil {
+		t.Fatal(err)
+	}
+	git(t, dir, "add", "-A")
+	git(t, dir, "commit", "-m", "init")
+	extra := filepath.Join(dir, "internal", "billing", "extra.go")
+	if err := os.WriteFile(extra, []byte("package billing\n\nfunc Extra() {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := cli.Run([]string{"run", "--dir", dir, "--output", ".quality/last.json"})
+	if err != nil {
+		var ee *cli.ExitError
+		if errors.As(err, &ee) && ee.Code != 0 {
+			t.Fatalf("untracked helper should not fail git with empty strict_paths, code %d", ee.Code)
+		} else if ee == nil {
+			t.Fatal(err)
+		}
+	}
+	raw, err := os.ReadFile(filepath.Join(dir, ".quality", "last.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(raw, []byte("extra.go")) && !bytes.Contains(raw, []byte("Extra")) {
+		t.Fatalf("default run should see untracked extra.go:\n%s", raw)
+	}
+}
+
 func TestTemplatesCopyIntoFixtureCursor(t *testing.T) {
 	dir := t.TempDir()
 	acts, err := cli.SetupCopy(dir, false)
@@ -389,6 +496,15 @@ func TestTemplatesCopyIntoFixtureCursor(t *testing.T) {
 	}
 	if !strings.Contains(text, ".quality/last.json") {
 		t.Fatal("missing last.json wait")
+	}
+	if !strings.Contains(string(b), "--mode review") {
+		t.Fatal("skill must run cqb run --mode review")
+	}
+	if !strings.Contains(strings.ToLower(string(b)), "--base") {
+		t.Fatal("skill must ask for --base when the base is ambiguous")
+	}
+	if strings.Contains(strings.ToLower(string(b)), "does not replace") {
+		t.Fatal("skill must not say the slash does not replace cqb run")
 	}
 }
 
@@ -437,7 +553,7 @@ func TestDogfoodSkipYellowRed(t *testing.T) {
 	}
 	raw, _ = os.ReadFile(filepath.Join(dir, ".quality", "yellow.json"))
 	if bytes.Contains(raw, []byte(`"has_red": true`)) {
-		t.Fatalf("empty allowlist hunters must not be red: %s", raw)
+		t.Fatalf("empty strict_paths hunters must not be red: %s", raw)
 	}
 
 	bad := "package billing\n\nfunc Broken() {\n\tx := 1\n}\n"

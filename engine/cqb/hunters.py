@@ -1,4 +1,4 @@
-"""Generic Go testing hunters. Red only on the allowlist; otherwise yellow."""
+"""Generic Go testing hunters. Red only on strict paths; otherwise yellow."""
 
 from __future__ import annotations
 

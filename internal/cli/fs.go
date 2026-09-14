@@ -129,7 +129,7 @@ Usage:
   cqb help
   cqb version
   cqb init [--dir PATH]
-  cqb run [--dir PATH] [--mode uncommitted|staged|file-list|push] [--files a.go,b.go] [--output PATH]
+  cqb run [--dir PATH] [--mode uncommitted|staged|file-list|push|review] [--base REF] [--files a.go,b.go] [--output PATH]
   cqb upgrade [--dir PATH]
   cqb render-reader [--dir PATH] [--out PATH]
   cqb setup-copy [--dir PATH] [--dry-run]
@@ -140,8 +140,7 @@ Pinned host tools (go install on init if missing):
   gremlins %s
     %s
 
-Opt-in hook: git config core.hooksPath .cqb/hooks
-  then CQB=1 git push
-  Init never sets core.hooksPath. Yellow never fails git.
+Opt-in hook: init sets local core.hooksPath=.cqb/hooks when unset.
+  CQB=1 git push still required. Yellow never fails git.
 `, cqb.KitVersion, cqb.GolangCILintVersion, cqb.GolangCILintInstall, cqb.GremlinsVersion, cqb.GremlinsInstall)
 }

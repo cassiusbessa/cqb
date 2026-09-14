@@ -17,7 +17,7 @@ if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))
 
 from cqb import bundle as bundlemod  # noqa: E402
-from cqb.collect import collect_files, matches_globs, matches_prefix  # noqa: E402
+from cqb.collect import collect_files, matches_prefix  # noqa: E402
 from cqb.complexity import classify  # noqa: E402
 from cqb.config import load_config  # noqa: E402
 from cqb.cover import evaluate_cover  # noqa: E402
@@ -41,19 +41,15 @@ def _read(root: Path, rel: str) -> str | None:
     return None
 
 
-def _added_lines(root: Path, rel: str, src: str, mode: str) -> tuple[str | None, set[int]]:
+def _added_lines(root: Path, rel: str, src: str, mode: str, base: str = "") -> tuple[str | None, set[int]]:
     head = git_show(root, f"HEAD:{rel}")
     if head is None:
         return None, set(range(1, src.count("\n") + 2))
-    return head, added_lines_for_file(root, rel, mode)
+    return head, added_lines_for_file(root, rel, mode, base=base)
 
 
-def _generate_coverprofile(root: Path, files: list[str], allowlist: list[str], prefixes: list[str]) -> str:
-    scoped = [
-        f
-        for f in files
-        if matches_globs(f, allowlist, prefixes=prefixes) and f.endswith(".go") and not f.endswith("_test.go")
-    ]
+def _generate_coverprofile(root: Path, files: list[str]) -> str:
+    scoped = [f for f in files if f.endswith(".go") and not f.endswith("_test.go")]
     if not scoped:
         return "mode: set\n"
     pkgs = sorted({"./" + (os.path.dirname(f).replace("\\", "/") or ".") for f in scoped})
@@ -84,9 +80,9 @@ def _io_files(root: Path, files: list[str], io_imports: list[str]) -> set[str]:
     return hit
 
 
-def run(root: Path, mode: str, explicit: list[str] | None, extra_cover: str | None, extra_mut: str | None) -> dict:
+def run(root: Path, mode: str, explicit: list[str] | None, extra_cover: str | None, extra_mut: str | None, base: str = "") -> dict:
     cfg = load_config(root / "cqb.yaml")
-    files = collect_files(root, mode, explicit)
+    files = collect_files(root, mode, explicit, base=base)
     prefixes = cfg.prefix_list()
     in_prefix = [f for f in files if matches_prefix(f, prefixes)]
     if prefixes and not in_prefix:
@@ -98,6 +94,7 @@ def run(root: Path, mode: str, explicit: list[str] | None, extra_cover: str | No
 
     scoped = in_prefix if prefixes else files
     go_files = [f for f in scoped if f.endswith(".go")]
+    strict = cfg.strict_paths
 
     hy = evaluate_hygiene(root, go_files)
     lint_slot = bundlemod.slot(hy.color, reason=hy.reason, gofmt=hy.gofmt, vet=hy.vet, build=hy.build)
@@ -117,7 +114,7 @@ def run(root: Path, mode: str, explicit: list[str] | None, extra_cover: str | No
         if src is None:
             continue
         head = git_show(root, f"HEAD:{rel}")
-        added = added_lines_for_file(root, rel, mode) if head is not None else set()
+        added = added_lines_for_file(root, rel, mode, base=base) if head is not None else set()
         rows = classify(
             file=rel,
             current_src=src,
@@ -151,7 +148,7 @@ def run(root: Path, mode: str, explicit: list[str] | None, extra_cover: str | No
                 content_findings(
                     rel=rel,
                     test_src=_read(root, rel) or "",
-                    allowlist=cfg.red_allowlist,
+                    allowlist=strict,
                     prefixes=prefixes,
                 )
             )
@@ -159,7 +156,7 @@ def run(root: Path, mode: str, explicit: list[str] | None, extra_cover: str | No
                 placebo_findings(
                     rel=rel,
                     test_src=_read(root, rel) or "",
-                    allowlist=cfg.red_allowlist,
+                    allowlist=strict,
                     enabled="placebo_validator" in cfg.extra_hunters,
                     prefixes=prefixes,
                 )
@@ -168,7 +165,7 @@ def run(root: Path, mode: str, explicit: list[str] | None, extra_cover: str | No
         src = _read(root, rel) or ""
         test_rel = rel[:-3] + "_test.go"
         test_src = _read(root, test_rel)
-        _, added = _added_lines(root, rel, src, mode)
+        _, added = _added_lines(root, rel, src, mode, base=base)
         hunter_hits.extend(
             quick_test_findings(
                 rel=rel,
@@ -176,7 +173,7 @@ def run(root: Path, mode: str, explicit: list[str] | None, extra_cover: str | No
                 test_src=test_src,
                 testable_include=cfg.testable.include,
                 testable_exclude=cfg.testable.exclude,
-                allowlist=cfg.red_allowlist,
+                allowlist=strict,
                 new_func_names=new_names_by_file.get(rel, []),
                 prefixes=prefixes,
             )
@@ -187,7 +184,7 @@ def run(root: Path, mode: str, explicit: list[str] | None, extra_cover: str | No
                 src=src,
                 test_src=test_src,
                 added_lines=added,
-                allowlist=cfg.red_allowlist,
+                allowlist=strict,
                 prefixes=prefixes,
             )
         )
@@ -197,7 +194,7 @@ def run(root: Path, mode: str, explicit: list[str] | None, extra_cover: str | No
                 content_findings(
                     rel=test_rel,
                     test_src=test_src,
-                    allowlist=cfg.red_allowlist,
+                    allowlist=strict,
                     prefixes=prefixes,
                 )
             )
@@ -236,11 +233,13 @@ def run(root: Path, mode: str, explicit: list[str] | None, extra_cover: str | No
     env_profile = os.environ.get("CQB_COVERPROFILE")
     if not coverprofile and env_profile and Path(env_profile).is_file():
         coverprofile = Path(env_profile).read_text(encoding="utf-8")
-    if not coverprofile and cfg.red_allowlist:
-        coverprofile = _generate_coverprofile(root, go_files, cfg.red_allowlist, prefixes)
+    if not coverprofile:
+        prod = [f for f in go_files if not f.endswith("_test.go")]
+        if prod:
+            coverprofile = _generate_coverprofile(root, go_files)
 
     cov = evaluate_cover(
-        allowlist=cfg.red_allowlist,
+        strict_paths=strict,
         diff_files=go_files,
         coverprofile=coverprofile,
         baseline_path=root / cfg.cover.baseline_path,
@@ -308,17 +307,21 @@ def run(root: Path, mode: str, explicit: list[str] | None, extra_cover: str | No
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="cqb-engine", description="CQB quality-gate orchestrator")
     p.add_argument("--root", required=True)
-    p.add_argument("--mode", default="uncommitted", choices=["uncommitted", "staged", "file-list", "push"])
+    p.add_argument("--mode", default="uncommitted", choices=["uncommitted", "staged", "file-list", "push", "review"])
     p.add_argument("--files", default="", help="comma-separated paths for file-list mode")
+    p.add_argument("--base", default="", help="review-mode comparison ref (merge-base)")
     p.add_argument("--output", default="")
     p.add_argument("--coverprofile", default="")
     p.add_argument("--mutation-json", default="")
     args = p.parse_args(argv)
     root = Path(args.root).resolve()
     files = [f for f in args.files.split(",") if f] if args.files else []
+    if args.mode == "review" and not args.base:
+        sys.stderr.write("review mode requires --base <ref>\n")
+        return 2
     cover = Path(args.coverprofile).read_text(encoding="utf-8") if args.coverprofile else None
     mut = Path(args.mutation_json).read_text(encoding="utf-8") if args.mutation_json else None
-    doc = run(root, args.mode, files or None, cover, mut)
+    doc = run(root, args.mode, files or None, cover, mut, base=args.base)
     text = json.dumps(doc, indent=2)
     out = args.output or os.environ.get("CQB_OUTPUT", "")
     if out:
@@ -333,10 +336,6 @@ def main(argv: list[str] | None = None) -> int:
 
 def _exit_code(doc: dict, mode: str) -> int:
     if doc.get("has_red"):
-        return 1
-    e2e = (doc.get("slots") or {}).get("e2e") or {}
-    # Flagged push: implied e2e without Docker is as blocking as hygiene red.
-    if mode == "push" and e2e.get("color") == "unavailable" and e2e.get("implied"):
         return 1
     return 0
 
