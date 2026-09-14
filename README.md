@@ -6,30 +6,46 @@ CQB is a **local quality gate** for Go. It was built for the **agentic
 Cursor** flow: in a session you ask for review, the agent runs the gate,
 reads the report, and tells you what to fix.
 
-The terminal (`cqb run`) and the git hook exist. The simplest path — and
-the one the kit was made for — is the Cursor chat.
-
-Needs Go 1.22+, `python3`, `git`, and `gofmt`/`go`.
+The terminal (`cqb run`) and the git hook exist. The simplest daily
+path — and the one the kit was made for — is the Cursor chat, **after**
+the kit is installed.
 
 ---
 
-## Quick start: a Cursor session
+## Quick start
+
+### 1. Install the kit
+
+On the machine: Go 1.22+, `python3`, `git`, and `gofmt`/`go`. Without
+those the gate does not run — and the agent cannot install the CLI.
+
+```bash
+go install github.com/cassiusbessa/cqb/cmd/cqb@v0.1.0
+cd /path/to/your/repo          # git root
+cqb init
+```
+
+`init` copies the engine into `.cqb/`, creates `cqb.yaml` if missing, and
+puts `golangci-lint` / `gremlins` on `PATH`. Do not point daily runs at
+`@latest`; pin a tag.
+
+### 2. Cursor session
 
 In the Cursor chat, a line starting with `/` starts an agent flow. CQB
 ships two.
 
-### First time in the repo: `/cqb-setup`
-
-Open chat at the **git root** and type `/cqb-setup`. The agent installs
-the CLI if needed, runs `cqb init`, and **asks** whether a suggested
-folder should join the **strict-paths list** (next section). Without your
-“yes”, the list stays empty: the gate keeps warning (yellow) and **does
-not** block `git push` over a weak unit test.
+**First configuration: `/cqb-setup`** — with the CLI already on `PATH`,
+open chat at the **git root** and type `/cqb-setup`. The agent reads the
+inventory and **asks** whether a suggested folder should join the
+**strict-paths list** (next section). Without your “yes”, the list stays
+empty: the gate keeps warning (yellow) and **does not** block `git push`
+over a fragile hunter or low coverage. If `.cqb/` is still missing, it
+runs `cqb init`; that does not replace step 1.
 
 The agent **does not know** your product and **does not pick** what
 should block git.
 
-### On every review: `/cqb`
+**On every review: `/cqb`**
 
 Type `/cqb`. The agent compares your branch to the base (`main` or
 `master`, usually), **runs the gate**, waits for the report
@@ -285,20 +301,13 @@ JSON, set `cover.baseline_path` in `cqb.yaml`. Imports that count as I/O
 
 ## In a terminal (besides Cursor)
 
-Daily work can be `/cqb` only. These commands are for a manual install,
-debugging, and the hook.
-
-```bash
-go install github.com/cassiusbessa/cqb/cmd/cqb@v0.1.0
-cd /path/to/your/repo          # git root
-cqb init
-cqb run
-```
+Daily work can be `/cqb` only. These commands are for debugging, the
+hook, and updating the engine copy already on disk.
 
 `cqb run` compares the files on disk to `HEAD` (including new untracked
 files).
 
-Do not point daily runs at `@latest`. Pin a tag; when you want to update:
+When you want to update the kit:
 
 ```bash
 go install github.com/cassiusbessa/cqb/cmd/cqb@v0.1.0

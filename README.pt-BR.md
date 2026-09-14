@@ -6,30 +6,46 @@ O CQB é um **portão de qualidade local** para código Go. Ele nasceu para o
 fluxo **agentico no Cursor**: numa sessão você pede a revisão, o agente
 roda o portão, lê o relatório e te diz o que corrigir.
 
-O terminal (`cqb run`) e o hook de git existem. A forma mais simples — e
-para a qual o kit foi feito — é o chat do Cursor.
-
-Precisa de Go 1.22+, `python3`, `git` e `gofmt`/`go`.
+O terminal (`cqb run`) e o hook de git existem. A forma mais simples no
+dia a dia — e para a qual o kit foi feito — é o chat do Cursor, **depois**
+do kit estar instalado.
 
 ---
 
-## Uso rápido: sessão no Cursor
+## Uso rápido
+
+### 1. Instale o kit
+
+Na máquina: Go 1.22+, `python3`, `git` e `gofmt`/`go`. Sem isso o portão
+não roda — nem o agente consegue instalar o CLI.
+
+```bash
+go install github.com/cassiusbessa/cqb/cmd/cqb@v0.1.0
+cd /caminho/do/seu/repositório     # a raiz do git
+cqb init
+```
+
+O `init` copia o motor para `.cqb/`, cria o `cqb.yaml` se faltar e põe
+`golangci-lint` / `gremlins` no `PATH`. Não aponte o dia a dia para
+`@latest`; pin a tag.
+
+### 2. Sessão no Cursor
 
 No chat do Cursor, uma linha que começa com `/` dispara um fluxo do
 agente. O CQB traz dois.
 
-### Primeira vez no repositório: `/cqb-setup`
-
-Abra o chat **na raiz do git** e escreva `/cqb-setup`. O agente instala o
-CLI se faltar, roda `cqb init` e **pergunta** se alguma pasta sugerida
-deve entrar na **lista de rigor** (a próxima seção). Sem o seu “sim”, a
-lista fica vazia: o portão continua avisando (amarelo) e **não** trava o
-`git push` por teste unitário fraco.
+**Primeira configuração: `/cqb-setup`** — com o CLI já no `PATH`, abra o
+chat **na raiz do git** e escreva `/cqb-setup`. O agente lê o inventário
+e **pergunta** se alguma pasta sugerida deve entrar na **lista de rigor**
+(a próxima seção). Sem o seu “sim”, a lista fica vazia: o portão
+continua avisando (amarelo) e **não** trava o `git push` por hunter
+frágil ou cobertura baixa. Se `.cqb/` ainda não existir, ele roda
+`cqb init`; não substitui o passo 1.
 
 O agente **não conhece** o seu produto e **não escolhe sozinho** o que
 deve bloquear o git.
 
-### Em cada revisão: `/cqb`
+**Em cada revisão: `/cqb`**
 
 Escreva `/cqb`. O agente compara a sua branch com a base (`main` ou
 `master`, em geral), **roda o portão**, espera o relatório
@@ -283,20 +299,13 @@ aponte `cover.baseline_path` no `cqb.yaml`. Imports que contam como I/O
 
 ## No terminal (além do Cursor)
 
-O dia a dia pode ser só `/cqb`. Estes comandos servem para instalar à
-mão, depurar, e para o hook.
-
-```bash
-go install github.com/cassiusbessa/cqb/cmd/cqb@v0.1.0
-cd /caminho/do/seu/repositório     # a raiz do git
-cqb init
-cqb run
-```
+O dia a dia pode ser só `/cqb`. Estes comandos servem para depurar, para
+o hook, e para atualizar o motor já copiado.
 
 O `cqb run` compara o que está no disco com o último commit (incluindo
 arquivos novos ainda não no git).
 
-Não aponte o dia a dia para `@latest`. Pin a tag; quando quiser atualizar:
+Quando quiser atualizar o kit:
 
 ```bash
 go install github.com/cassiusbessa/cqb/cmd/cqb@v0.1.0
