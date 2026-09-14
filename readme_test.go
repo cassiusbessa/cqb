@@ -18,20 +18,18 @@ func TestREADMEDocumentsSurface(t *testing.T) {
 		"/cqb-setup",
 		"cqb run",
 		"/cqb",
-		"opt-in",
-		"Yellow never",
+		"Quick start",
+		"Glossary",
+		"skip list",
 		".gitignore",
 		"prefix",
 		"services/billing",
 		"red_allowlist",
 		"unavailable",
-		"Constitution",
 		"globs.txt",
 		"go test -tags e2e",
 		"README.pt-BR.md",
-		"not an ignore list",
-		"Manual configuration",
-		"HALT",
+		"yellow",
 	} {
 		if !strings.Contains(text, n) {
 			t.Errorf("README missing %q", n)
@@ -49,13 +47,14 @@ func TestREADMEPortuguese(t *testing.T) {
 		"go install",
 		"cqb init",
 		"/cqb-setup",
-		"não é lista de ignore",
-		"Configuração manual",
+		"Uso rápido",
+		"Glossário",
+		"lista do que o CQB ignora",
 		"red_allowlist",
 		"prefix",
 		"services/billing",
-		"HALT",
 		"globs.txt",
+		"README.md",
 	} {
 		if !strings.Contains(text, n) {
 			t.Errorf("README.pt-BR.md missing %q", n)
