@@ -15,6 +15,8 @@ complexity:
   nested_if: 5
   delta: 5
 red_allowlist: []
+# Empty = hunters/cover cannot be red (not an ignore list).
+# After a human names a recorte, e.g. internal/billing/** — those paths MAY fail git.
 testable:
   include:
     - "internal/"

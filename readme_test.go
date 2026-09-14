@@ -28,9 +28,37 @@ func TestREADMEDocumentsSurface(t *testing.T) {
 		"Constitution",
 		"globs.txt",
 		"go test -tags e2e",
+		"README.pt-BR.md",
+		"not an ignore list",
+		"Manual configuration",
+		"HALT",
 	} {
 		if !strings.Contains(text, n) {
 			t.Errorf("README missing %q", n)
+		}
+	}
+}
+
+func TestREADMEPortuguese(t *testing.T) {
+	b, err := os.ReadFile("README.pt-BR.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(b)
+	for _, n := range []string{
+		"go install",
+		"cqb init",
+		"/cqb-setup",
+		"não é lista de ignore",
+		"Configuração manual",
+		"red_allowlist",
+		"prefix",
+		"services/billing",
+		"HALT",
+		"globs.txt",
+	} {
+		if !strings.Contains(text, n) {
+			t.Errorf("README.pt-BR.md missing %q", n)
 		}
 	}
 }
