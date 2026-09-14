@@ -114,9 +114,29 @@ func cmdInit(dir string) error {
 		fmt.Fprintf(os.Stderr, "cqb init: host tools: %v (continuing)\n", err)
 	}
 	fmt.Fprintf(os.Stdout, "cqb init: wrote .cqb/, cqb.yaml, .gitignore, .cqb/scan.json, .cqb/hooks/pre-push\n")
-	fmt.Fprintf(os.Stdout, "hook is opt-in. To attach (never done automatically):\n  git config core.hooksPath .cqb/hooks\n  CQB=1 git push\n")
+	attachLocalHooksPath(dir)
 	fmt.Fprintf(os.Stdout, "pinned: golangci-lint %s  gremlins %s\n", cqb.GolangCILintVersion, cqb.GremlinsVersion)
 	return nil
+}
+
+func attachLocalHooksPath(dir string) {
+	get := exec.Command("git", "-C", dir, "config", "--local", "--get", "core.hooksPath")
+	out, err := get.CombinedOutput()
+	cur := strings.TrimSpace(string(out))
+	if err == nil && cur != "" {
+		if cur == ".cqb/hooks" {
+			fmt.Fprintf(os.Stdout, "local core.hooksPath=.cqb/hooks (still no-op unless CQB=1 git push)\n")
+			return
+		}
+		fmt.Fprintf(os.Stdout, "core.hooksPath is %s (left unchanged). To use CQB:\n  git config --local core.hooksPath .cqb/hooks\n  CQB=1 git push\n", cur)
+		return
+	}
+	set := exec.Command("git", "-C", dir, "config", "--local", "core.hooksPath", ".cqb/hooks")
+	if err := set.Run(); err != nil {
+		fmt.Fprintf(os.Stdout, "hook is opt-in (could not set core.hooksPath here). To attach:\n  git config --local core.hooksPath .cqb/hooks\n  CQB=1 git push\n")
+		return
+	}
+	fmt.Fprintf(os.Stdout, "set local core.hooksPath=.cqb/hooks (still no-op unless CQB=1 git push)\n")
 }
 
 func catalogRootForNewYAML(dir string, yamlBytes []byte, res scan.Result) string {
@@ -238,6 +258,13 @@ func cmdRun(args []string) error {
 		return fmt.Errorf("vendored engine missing (%s); run cqb init", engine)
 	}
 	cmdArgs := []string{engine, "--root", dir, "--mode", mode, "--output", output}
+	if mode == "review" {
+		base, err := ResolveReviewBase(dir, flag(args, "--base", ""))
+		if err != nil {
+			return err
+		}
+		cmdArgs = append(cmdArgs, "--base", base)
+	}
 	if files != "" {
 		cmdArgs = append(cmdArgs, "--files", files)
 	}

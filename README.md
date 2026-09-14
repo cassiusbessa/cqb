@@ -3,12 +3,12 @@
 [Português (Brasil)](README.pt-BR.md)
 
 CQB is a **local quality gate** for Go. It looks only at what you changed
-in git, writes a **report** to `.quality/last.json`, and — if you want —
-a Cursor chat command (`/cqb`) reads that report during review.
+in git, writes a report to `.quality/last.json`, and in Cursor `/cqb`
+**runs the gate and explains that report**.
 
 On first install it **does not block git push** for a weak unit test or
-missing coverage. That starts only after you name specific paths (the
-*allowlist* — explained below).
+low coverage. That starts only after you name folders on the **strict
+paths** list (explained below).
 
 Needs Go 1.22+, `python3`, `git`, and `gofmt`/`go`.
 
@@ -28,11 +28,11 @@ files). It format-checks and builds the Go that changed. If those
 changes overlap a journey-test (e2e) suite, it may run those tests —
 they usually need Docker.
 
-- Exit **0** most of the time: the report is for you (and `/cqb`) to read,
-  not to freeze git.
-- Exit **1** up front only if `gofmt`, `go vet`, or `go build` failed, or
-  an e2e suite that *should* run broke. A missing unit test **does not**
-  fail git at this stage.
+- Exit **0** most of the time: the report is for you (and `/cqb`) to read.
+  Yellow never changes this exit code.
+- Exit **1** only when some check is **red**: usually `gofmt`, `go vet`,
+  `go build`, or e2e that ran and failed. A missing unit test **does not**
+  fail git while strict paths are empty.
 
 Do not point daily runs at `@latest`. Pin a tag; when you want to update:
 
@@ -50,39 +50,42 @@ cqb upgrade
 
 ```
 your-repo/
-  cqb.yaml              *your* settings (prefix, allowlist, ceilings…).
+  cqb.yaml              *your* settings (prefix, strict paths, ceilings…).
                         init creates it only if it is missing
   .cqb/
     engine/             copy of the (Python) engine that `cqb run` uses
     templates/          skill and hook templates
-    hooks/pre-push      hook script; **not** attached to git yet
-    scan.json           automatic inventory (how many tests, e2e dirs)
-    work/               scratch (cover profiles); gitignored
+    hooks/pre-push      hook script (only works with CQB=1)
+    scan.json           inventory (how many tests, e2e dirs)
+    work/               scratch; gitignored
   .quality/             reports (`last.json`); gitignored
-  .gitignore            init appends a `# cqb begin` … `# cqb end` block
+  .gitignore            `# cqb begin` … `# cqb end` block
 ```
 
 Git **should** track `cqb.yaml`, `.cqb/engine`, `.cqb/hooks`, and
 `.cqb/templates`. Init **does not** ignore those. It ignores runtime junk:
 `.quality/`, `scan.json`, `work/`, `*.coverprofile`.
 
-`scan.json` is not configuration. It is a snapshot at init time (Go
-module path, `*_test.go` density, directories that already have an e2e
-`globs.txt`). `/cqb-setup` uses it to *suggest* folders; you decide.
+`scan.json` is not configuration. It is a snapshot at init time.
+`/cqb-setup` uses it to *suggest* folders; you decide.
 
-Sometimes the scan finds **one** directory that already has journey
-tests (e2e), for example `services/billing/internal/e2e`. A brand-new
-`cqb.yaml` records that path as `e2e.catalog_root` — only so CQB knows
-where to look for suites. That **does not** pick folders that block
-push. Monorepo `prefix` and the allowlist **stay empty** until you fill
-them in — see [When git root ≠ Go module](#when-git-root--go-module) and
-[Allowlist](#allowlist-where-yellow-may-become-red).
+**When does init set `e2e.catalog_root`?** It looks for directories that
+already have journey tests. **Exactly one** (e.g.
+`services/billing/internal/e2e`) → a **new** `cqb.yaml` records that path,
+only so CQB knows where to look for suites. Zero, or two or more → it
+leaves the field alone; it does not pick for you. That **does not** fill
+strict paths or `prefix`.
+
+If `core.hooksPath` was empty in this repository, init points local git
+at `.cqb/hooks`. If you already had another value (husky, …), it does
+not overwrite. Either way the hook **only runs CQB** when that push has
+`CQB=1`.
 
 ---
 
 ## Colors in the report
 
-Each section of the report (lint, tests, e2e, coverage, …) gets a color:
+Each section (lint, tests, e2e, coverage, …) gets a color:
 
 | Color | Git | Meaning |
 |---|---|---|
@@ -90,23 +93,23 @@ Each section of the report (lint, tests, e2e, coverage, …) gets a color:
 | yellow | continues | Note for review. **Never** makes `cqb run` exit 1. |
 | red | **stops** (`cqb run` exits 1) | CQB treats this as a blocker. |
 | skip | continues | Out of scope for this diff. Not a pass. |
-| unavailable | continues day-to-day | A tool was missing (Docker, gremlins). Not a pass. |
+| unavailable | continues | A tool was missing (Docker, gremlins). Not a pass. |
 
-`cqb run` exits 1 when **any** section is red.
-
-Hook exception (optional, end of this guide): if you attach the hook and
-run `CQB=1 git push`, e2e `unavailable` while a suite *should* have run
-also exits 1 — usually Docker not on `PATH`.
+`cqb run` exits 1 when **any** section is red — in the terminal, in
+`--mode push`, and in the hook with `CQB=1`. Missing Docker while a
+suite *should* have run stays `unavailable` and **does not** become red
+by itself. E2e that ran and failed an assert, or a broken `globs.txt`,
+stay red.
 
 ---
 
 ## What CQB checks
 
-Only the **diff** (and, if you set it, only under `prefix`). It never
-walks the whole module “to be sure”.
+Only the **diff** (and, if you set `prefix` in `cqb.yaml`, only under
+that directory). It never walks the whole module.
 
 **Hygiene (lint)** — `gofmt`, `go vet`, `go build` on packages of the
-`.go` files that changed. Failure → red, **even with an empty allowlist**.
+`.go` files that changed. Failure → red, **even with empty strict paths**.
 
 **Complexity** — **new** functions over the ceilings (cognitive 30,
 cyclomatic 30, nested-if 5) are **yellow**. Old functions: only the
@@ -114,10 +117,10 @@ cyclomatic 30, nested-if 5) are **yellow**. Old functions: only the
 
 **Quick test** — for a **new** function `Foo` under a “testable” path
 (default `internal/`, excluding `internal/interface/`): is there a
-`TestFoo` **and** does the test body **call** `Foo(`? Missing name or
+`TestFoo` **and** does the test body **call** `Foo(`? Missing test or
 missing call → a warning. This is **not** coverage percent and **not**
 the e2e `go test`. HTTP handlers (`http.ResponseWriter`) are skipped.
-Empty allowlist → **yellow**; on the allowlist → **red**.
+Empty strict paths → **yellow**; path on the list → **red**.
 
 **Test-file checks (hunters)** — fragile patterns, for example:
 
@@ -127,56 +130,55 @@ Empty allowlist → **yellow**; on the allowlist → **red**.
 - a **new production** comparison (`n > 10`, `len(x) == 0`) whose number
   never appears in the package tests
 
-Empty allowlist → yellow. On the allowlist → red.
+Empty list → yellow. On the list → red.
 
 **E2e** — if the diff matches a suite’s `globs.txt`, CQB runs
 `go test -tags e2e` in that directory. Pass → green. Failed assert → red.
-No Docker while a suite was implied → `unavailable`. This is **not** the
-allowlist: implying Docker does not fail git for a missing `TestFoo`.
+No Docker while a suite was requested → `unavailable`. This is **not**
+strict paths: implying Docker does not fail git for a missing `TestFoo`.
 
-**Coverage (cover)** — percent of statements hit by unit tests, **only**
-when the allowlist is non-empty **and** the diff touches matching
-production `.go`. Empty allowlist → this section is `skip` (does not even
-run). A pure helper with no `Foo(` in tests → red. A file that talks to
-the DB/HTTP below 80% → red. CQB **does not** rewrite the baseline file
-on `cqb run`.
+**Coverage** — percent of code hit by unit tests, on packages of
+production `.go` in the diff. **Runs even when strict paths are empty**
+(then the warning is yellow). It may turn red — and stop git — only on
+paths that match the list. No production `.go` in the diff → `skip`.
+CQB **does not** rewrite the baseline file on `cqb run`.
 
 **Mutation** — optional (gremlins), only if the new function already has
 an invoking test. Surviving mutant → yellow, never red in v0.1.
 
 ---
 
-## Allowlist: where yellow may become red
+## Strict paths (`strict_paths`)
 
-`red_allowlist` in `cqb.yaml` is a list of **path patterns** (globs). It
-is **not** a skip list / ignore list.
+In `cqb.yaml` the key is `strict_paths` (the old name `red_allowlist` is
+still read). It is not “permission” and **not** a skip / ignore list.
 
-- Path **inside** a glob → quick test, hunters, and coverage **may** turn
-  red and `cqb run` **may exit 1**.
-- Path **outside**, or list `[]` → the same warnings stay yellow (or
-  coverage `skip`) and **do not** fail git.
+You **name the folders where a warning may stop the push**. It is not
+the set of everything you want tested. It is not an exclusion list:
+paths off the list are still checked; they just do not go red.
 
 ```yaml
-red_allowlist: []          # default after init: none of that is red
+# in cqb.yaml
+strict_paths: []                 # default: test/coverage warnings do not stop git
 
-red_allowlist:
-  - "internal/billing/**"  # from now on, a weak test *in this folder* may block push
+strict_paths:
+  - "internal/billing/**"        # in this folder, a weak test / low cover MAY exit 1
 ```
+
+A **glob** is a path pattern. `internal/billing/**` = everything under
+that folder. `*invoice*` = a path that contains `invoice`. You do **not**
+have to list the whole module. Start empty; add only the recorte the
+team wants as a blocker.
 
 Do not paste `internal/` “to be safe”: then **every** new helper under
 `internal/` can fail git.
 
-The allowlist is **not** “coverage percent only”. Coverage is one
-warning. On those paths, these can also turn red: a new function with no
-test that calls it; `t.Fatal` that does not show got vs want; the other
-hunters in the section above.
-
 Still red **with an empty list**: hygiene (`gofmt`/`vet`/`build`) and e2e
 that ran and failed (or a broken `globs.txt` catalog).
 
-**Do not confuse this with e2e `globs.txt`.** That file only answers
-“should we run the integration suite?” The allowlist answers “on this
-path, may a unit-test warning block the push?” The strings can match;
+**Do not confuse this with e2e `globs.txt`.** That file answers “should
+we **run** this journey suite?” Strict paths answer “on this path, may a
+unit-test / coverage warning **block the push**?” The strings can match;
 the questions do not.
 
 ---
@@ -187,32 +189,37 @@ CQB never scans the whole tree. `--mode` picks **which diff**.
 
 | Command | What is in scope |
 |---|---|
-| `cqb run` | Changed or new since `HEAD` (includes untracked). Daily driver. |
+| `cqb run` | Changed or new since `HEAD` (includes untracked). Daily terminal use. |
 | `cqb run --mode staged` | Only `git add` (the next commit). |
 | `cqb run --mode push` | Diff vs upstream (`git push`). What the hook calls. |
+| `cqb run --mode review` | Commits since merge-base of the base branch **plus** the working tree. What `/cqb` calls. |
 | `cqb run --mode file-list --files a.go,b.go` | Only those paths. Handy to debug one file. |
+
+`--mode review` picks the base as: tracking upstream if it exists;
+otherwise `main` **or** `master` if only one of those exists. If both
+exist (or neither), the command **stops and asks** for `--base <ref>` —
+it does not guess. `/cqb` asks you the same question.
 
 `--output` (default `.quality/last.json`) is only where the report is written.
 
 ---
 
-## Cursor commands (optional)
+## Cursor commands
 
 In the Cursor chat, a line starting with `/` starts an agent flow. CQB
-ships two. Neither replaces `cqb run` in the terminal.
+ships two.
+
+**`/cqb`** — code review. Picks the diff (`--mode review`, unless you
+asked only for the working tree), **runs `cqb run`**, waits for
+`.quality/last.json`, and writes in Portuguese what to fix. You do not
+need to run the CLI first. Do not paste the JSON into chat.
 
 **`/cqb-setup`** — guided first config. Installs the CLI if needed, runs
 `cqb init`, reads `scan.json`, and **asks** whether a suggested folder
-(usually one that already has an e2e suite) should join the allowlist.
+(usually one that already has an e2e suite) should join strict paths.
 Without your “yes”, the list stays empty: the gate keeps warning (yellow)
 and does not block push over unit tests. The agent **does not know** your
-product; it will not guess “the important folder”. If the suggestion is
-wrong, say no.
-
-**`/cqb`** — code review. Builds a unified diff, starts `cqb run` in the
-background if the diff touches `prefix`, waits for `.quality/last.json`,
-and writes what to fix. Do not paste the JSON into chat. Operator prose
-defaults to pt-BR.
+product and **does not pick** the folder that should block the push.
 
 Kit skills are copied only if the destination file **does not already
 exist** under your `.cursor/`. Your own domain rules still win on those
@@ -220,10 +227,14 @@ paths.
 
 ---
 
-## When git root ≠ Go module
+## The `cqb.yaml` file
+
+All configuration lives **in this file** at the git root (or the path you
+pass to `cqb run`). It is not an environment variable.
 
 If git shows `services/billing/internal/foo.go` but tests and `globs.txt`
-say `internal/foo.go`, tell CQB where the module lives:
+say `internal/foo.go`, the Go module is not the git root. Set the prefix
+**in `cqb.yaml`**:
 
 ```yaml
 prefix: "services/billing"
@@ -234,16 +245,21 @@ Without that, the default `internal/` does not see
 
 Several modules: most-specific path first, under `prefixes`.
 
-Check:  
-`cqb run --mode file-list --files services/billing/internal/billing/normalize.go`  
-must not say the diff is outside the prefix, if that is the code you care about.
+Check with:
+
+```bash
+cqb run --mode file-list --files services/billing/internal/billing/normalize.go
+```
+
+It must not say the diff is outside the prefix, if that is the code you care about.
 
 ---
 
-## E2e (`globs.txt`) and coverage — when you get there
+## E2e (`globs.txt`) and ceilings — when you get there
 
-Each suite is a directory with `globs.txt`, for example
-`services/billing/internal/e2e/invoices/globs.txt`:
+Each suite is a directory with a `globs.txt`. That file lists what
+**should trigger** the suite if it appears in the diff — not what to
+skip. Example `services/billing/internal/e2e/invoices/globs.txt`:
 
 ```
 internal/application/services/*invoice*
@@ -256,36 +272,44 @@ Missing SQL → catalog **red**.
 
 Init **does not** invent suites. You (or the team) write `globs.txt`.
 
-Coverage runs only with a non-empty allowlist. Default baseline:
-`.cqb/cover-baseline.json`. If you already keep another JSON, set
-`cover.baseline_path`. Imports that count as I/O (80% floor):
+Coverage baseline default: `.cqb/cover-baseline.json`. If you already
+keep another JSON, set `cover.baseline_path` in `cqb.yaml`. Imports that
+count as I/O (80% floor when the path is on strict paths):
 `database/sql`, `net/http`, `os` — extend via `io_imports`.
 
 Complexity ceilings are **yellow only**. HTTP handlers with many
 `if err != nil` often want `cyclomatic` 35; `/cqb-setup` may *suggest*
-that, and will not write yaml unless you agree.
+that and **will not** write yaml unless you agree.
 
 ---
 
-## Git hook (opt-in)
+## Git hook
 
-Init **writes** `.cqb/hooks/pre-push` and **does not** attach it. To attach:
+After `init`, if the repository had no `core.hooksPath`, local git
+already points at `.cqb/hooks`. The script **does nothing** until:
 
 ```bash
-git config core.hooksPath .cqb/hooks
-CQB=1 git push          # then it runs `cqb run --mode push`
-git push                # without CQB the script is a no-op
+CQB=1 git push          # runs `cqb run --mode push`
+git push                # without CQB, the push proceeds
 ```
 
 Do not export `CQB=1` in bashrc: every push would wait on the gate.
+Yaml **cannot** turn the hook on by itself.
 
 ---
 
-## Constitution (yaml cannot undo this)
+## What yaml cannot undo
 
-`cqb.yaml` tunes ceilings, prefix, allowlist, e2e catalog. It **cannot**
-scan the whole module, make yellow fail git, or attach the hook by itself.
+`cqb.yaml` tunes ceilings, prefix, strict paths, e2e catalog. It
+**cannot**:
+
+- scan the whole module “to be sure”
+- make yellow fail git
+- require `CQB=1` on every teammate’s push
+- paint test/coverage red off the strict-paths list
+
 Keys such as `yellow_blocks` are ignored (`ignored_keys` on the report).
+That is intentional: the team does not freeze git on a complexity ceiling.
 
 ---
 
@@ -307,21 +331,20 @@ lint slot is only gofmt/vet/build. golangci is for you or for `/cqb`.
 
 | Term | Meaning here |
 |---|---|
-| Report / bundle | JSON file `.quality/last.json` with a color per check. |
+| Report | JSON file `.quality/last.json` with a color per check. |
 | Slot | One section of that report (lint, test, e2e, cover, …). |
-| Allowlist (`red_allowlist`) | Path globs where a test/coverage warning **may** turn red and stop git. Not an ignore list. |
+| Strict paths (`strict_paths`) | Globs where a test/coverage warning **may** turn red and stop git. Not an ignore list. Old yaml `red_allowlist` is the same field. |
 | Glob | Path pattern (`internal/billing/**`, `*invoice*`). |
-| Prefix (`prefix`) | Go module directory when it is not the git root. |
+| Prefix (`prefix`) | Go module directory, **in `cqb.yaml`**, when it is not the git root. |
 | Quick test | “Does new `Foo` have `TestFoo` that calls `Foo(`?” Not e2e, not %. |
 | Hunter | Automatic check on a `*_test.go` or a new production line. |
-| Cover / coverage | Percent of code hit by unit tests (`go test -cover`). |
+| Coverage | Percent of code hit by unit tests (`go test -cover`). |
 | E2e | Journey test (`go test -tags e2e`), usually with Docker. |
-| `globs.txt` | List that decides whether e2e **runs**, not whether unit tests are red. |
-| Scan (`scan.json`) | Inventory written at init; not the allowlist. |
-| Opt-in hook | Pre-push script that runs the gate only when `CQB=1`. |
-| Engine | Python under `.cqb/engine` that actually builds the report. |
-| `/cqb`, `/cqb-setup` | Commands in the **Cursor chat**, not the terminal. |
-| Consumer | The Go repository that installed CQB. |
+| `globs.txt` | List that **triggers** e2e, not what turns unit tests red. |
+| Scan (`scan.json`) | Inventory written at init; not the strict-paths list. |
+| Hook | Pre-push script; only analyzes when `CQB=1`. |
+| Engine | Python under `.cqb/engine` that builds the report. |
+| `/cqb`, `/cqb-setup` | Commands in the **Cursor chat**. `/cqb` runs the gate and interprets it. |
 | Skip / unavailable | Did not run / tool missing. Do not read as green. |
 
 ---

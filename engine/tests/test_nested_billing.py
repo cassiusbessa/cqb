@@ -184,7 +184,7 @@ class TestNestedBilling(unittest.TestCase):
             e2e = doc["slots"]["e2e"]
             self.assertNotEqual(e2e["color"], "red")  # catalog ok; may be unavailable without docker
 
-    def test_push_without_docker_exits_1(self):
+    def test_push_without_docker_exits_0(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             _write_nested(root, e2e_body=E2E_PASS)
@@ -250,7 +250,7 @@ class TestNestedBilling(unittest.TestCase):
             doc = json.loads((root / ".quality" / "last.json").read_text())
             self.assertEqual(doc["slots"]["e2e"]["color"], "unavailable", msg=json.dumps(doc, indent=2))
             self.assertFalse(doc["has_red"], msg=json.dumps(doc, indent=2))
-            self.assertEqual(p.returncode, 1)
+            self.assertEqual(p.returncode, 0)
 
 
 if __name__ == "__main__":

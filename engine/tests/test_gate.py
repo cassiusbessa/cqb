@@ -47,8 +47,32 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(cfg.complexity.cognitive, 30)
         self.assertEqual(cfg.complexity.cyclomatic, 30)
         self.assertEqual(cfg.complexity.nested_if, 5)
-        self.assertEqual(cfg.red_allowlist, [])
+        self.assertEqual(cfg.strict_paths, [])
         self.assertEqual(cfg.extra_hunters, [])
+
+    def test_strict_paths_wins_over_alias(self):
+        cfg = parse_config(
+            textwrap.dedent(
+                """
+                red_allowlist:
+                  - "internal/billing/**"
+                strict_paths: []
+                """
+            )
+        )
+        self.assertEqual(cfg.strict_paths, [])
+
+    def test_red_allowlist_alias(self):
+        cfg = parse_config(
+            textwrap.dedent(
+                """
+                red_allowlist:
+                  - "internal/billing/**"
+                """
+            )
+        )
+        self.assertEqual(cfg.strict_paths, ["internal/billing/**"])
+        self.assertEqual(cfg.red_allowlist, ["internal/billing/**"])
 
     def test_illegal_keys_ignored(self):
         cfg = parse_config(
@@ -283,10 +307,25 @@ class TestE2E(unittest.TestCase):
 
 
 class TestCover(unittest.TestCase):
-    def test_empty_allowlist_skips(self):
+    def test_empty_strict_paths_is_yellow_not_skip(self):
         r = evaluate_cover(
-            allowlist=[],
+            strict_paths=[],
             diff_files=["internal/billing/normalize.go"],
+            coverprofile="mode: set\n",
+            baseline_path=None,
+            rewrite_baseline=False,
+            io_floor=80,
+            io_files=set(),
+            invoked_pure=set(),
+        )
+        self.assertEqual(r.color, "yellow")
+        self.assertNotEqual(r.color, "skip")
+        self.assertNotEqual(r.color, "red")
+
+    def test_no_production_go_skips(self):
+        r = evaluate_cover(
+            strict_paths=[],
+            diff_files=["internal/billing/normalize_test.go"],
             coverprofile="mode: set\n",
             baseline_path=None,
             rewrite_baseline=False,
@@ -299,7 +338,7 @@ class TestCover(unittest.TestCase):
     def test_refuses_rewrite_flag(self):
         with self.assertRaises(AssertionError):
             evaluate_cover(
-                allowlist=["internal/billing/**"],
+                strict_paths=["internal/billing/**"],
                 diff_files=["internal/billing/normalize.go"],
                 coverprofile=None,
                 baseline_path=None,
@@ -309,9 +348,9 @@ class TestCover(unittest.TestCase):
                 invoked_pure=set(),
             )
 
-    def test_missing_profile_is_not_yellow(self):
+    def test_missing_profile_on_strict_path_is_red(self):
         r = evaluate_cover(
-            allowlist=["internal/billing/**"],
+            strict_paths=["internal/billing/**"],
             diff_files=["internal/billing/normalize.go"],
             coverprofile=None,
             baseline_path=None,
@@ -410,6 +449,34 @@ class TestOrchestratorSkipAndYellow(unittest.TestCase):
             self.assertFalse(doc["has_red"])
             self.assertEqual(doc["slots"]["complexity"]["color"], "yellow")
             self.assertIn("yellow_blocks", doc["ignored_keys"])
+
+    def test_empty_strict_paths_cover_runs_yellow(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "cqb.yaml").write_text(
+                textwrap.dedent(
+                    """
+                    prefix: ""
+                    strict_paths: []
+                    testable:
+                      include: ["internal/"]
+                      exclude: []
+                    """
+                ),
+                encoding="utf-8",
+            )
+            (root / "go.mod").write_text("module github.com/example/billingapp\n\ngo 1.22\n")
+            pkg = root / "internal" / "billing"
+            pkg.mkdir(parents=True)
+            (pkg / "normalize.go").write_text(
+                "package billing\n\nfunc NormalizeX(s string) string { return s }\n",
+                encoding="utf-8",
+            )
+            code, doc = _run_orch(root, "file-list", "internal/billing/normalize.go")
+            self.assertEqual(code, 0, msg=json.dumps(doc, indent=2))
+            self.assertNotEqual(doc["slots"]["cover"]["color"], "skip")
+            self.assertNotEqual(doc["slots"]["cover"]["color"], "red")
+            self.assertEqual(doc["slots"]["cover"]["color"], "yellow")
 
 
 if __name__ == "__main__":

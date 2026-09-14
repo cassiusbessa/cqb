@@ -7,8 +7,8 @@ import (
 )
 
 func BundleReader(tmpl string, cfg config.Config) string {
-	allow := cfg.RedAllowlist
-	allowText := "_empty_ — no cover red, no hunter red until a human confirms a scope."
+	allow := cfg.StrictPaths
+	allowText := "_empty_ — no cover red, no hunter red until a human names strict paths."
 	if len(allow) > 0 {
 		allowText = strings.Join(allow, ", ")
 	}
@@ -17,6 +17,7 @@ func BundleReader(tmpl string, cfg config.Config) string {
 		"{{cyclomatic}}", itoa(cfg.Complexity.Cyclomatic),
 		"{{nested_if}}", itoa(cfg.Complexity.NestedIf),
 		"{{delta}}", itoa(cfg.Complexity.Delta),
+		"{{strict_paths}}", allowText,
 		"{{red_allowlist}}", allowText,
 	)
 	return r.Replace(tmpl)

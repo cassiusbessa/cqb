@@ -1,11 +1,12 @@
 # CQB consumer config.
 # Constitution (not overridable): diff-only, new-func absolute complexity,
-# legacy is delta, yellow never fails git, empty red allowlist until a human
-# names a scope, hook is opt-in, the agent is not the git exit code.
+# legacy is delta, yellow never fails git, empty strict_paths until a human
+# names a scope, hook file may be attached locally, execution still needs
+# CQB=1, the agent is not the git exit code.
 #
-# Nested module: set prefix (or prefixes, most-specific first). Globs in
-# globs.txt / testable / red_allowlist may be written relative to that module
-# (internal/...) even when git paths are services/billing/internal/....
+# Nested module: set prefix in this file (or prefixes, most-specific first).
+# Globs in globs.txt / testable / strict_paths may be written relative to
+# that module (internal/...) even when git paths are services/billing/internal/....
 kit_version: "0.1.0"
 prefix: ""
 operator_language: "pt-BR"
@@ -14,9 +15,10 @@ complexity:
   cyclomatic: 30
   nested_if: 5
   delta: 5
-red_allowlist: []
+strict_paths: []
 # Empty = hunters/cover cannot be red (not an ignore list).
 # After a human names a recorte, e.g. internal/billing/** — those paths MAY fail git.
+# Deprecated alias: red_allowlist (still read if strict_paths is absent).
 testable:
   include:
     - "internal/"

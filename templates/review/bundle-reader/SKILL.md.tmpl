@@ -1,7 +1,7 @@
 ---
 name: cqb-bundle-reader
 description: >-
-  Read .quality/last.json for this consumer. Ceilings and allowlist are
+  Read .quality/last.json for this consumer. Ceilings and strict paths are
   interpolated from cqb.yaml so this prose cannot drift.
 ---
 
@@ -13,9 +13,9 @@ Operator language: pt-BR. Do not paste the raw JSON.
 
 Each slot is `red` | `yellow` | `skip` | `unavailable` | `green`.
 
-- **red** — git exit 1 (gofmt/vet/build; broken e2e catalog; allowlist cover/hunters).
-- **yellow** — never fails git. Complexity over ceiling, missing quick tests outside the allowlist, surviving mutants, hunters outside the allowlist.
-- **skip** — not applicable (prefix miss, empty allowlist cover, no matching e2e suite). Not a pass.
+- **red** — git exit 1 (gofmt/vet/build; broken e2e catalog; strict-path cover/hunters).
+- **yellow** — never fails git. Complexity over ceiling, missing quick tests off the list, surviving mutants, hunters off the list.
+- **skip** — not applicable (prefix miss, no production Go for cover, no matching e2e suite). Not a pass.
 - **unavailable** — tool missing (python3, docker, gremlins). Not a pass, never green.
 
 `has_red` is true only when at least one slot is red. Yellow MUST NOT set `has_red`.
@@ -29,11 +29,13 @@ Each slot is `red` | `yellow` | `skip` | `unavailable` | `green`.
 
 Exceeding a ceiling on a **new** function is yellow, never red. Legacy body edits use delta, not historical absolute complexity.
 
-## Red allowlist
+## Strict paths (`strict_paths` in cqb.yaml)
 
-{{red_allowlist}}
+{{strict_paths}}
 
-Empty allowlist: no cover red, no hunter red. Hygiene (gofmt/vet/build) may still be red.
+Empty list: no cover red, no hunter red. Hygiene (gofmt/vet/build) may still be red. Cover still **runs** on production Go in the diff (yellow off the list).
+
+`prefix` is a key in **cqb.yaml** (not an environment variable).
 
 ## Verification-gap
 

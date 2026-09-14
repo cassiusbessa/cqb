@@ -20,20 +20,25 @@ func TestREADMEDocumentsSurface(t *testing.T) {
 		"/cqb",
 		"Quick start",
 		"Glossary",
-		"skip list",
+		"strict_paths",
+		"skip / ignore list",
 		".gitignore",
 		"prefix",
 		"services/billing",
-		"red_allowlist",
 		"unavailable",
 		"globs.txt",
 		"go test -tags e2e",
 		"README.pt-BR.md",
 		"yellow",
+		"--mode review",
+		"cqb.yaml",
 	} {
 		if !strings.Contains(text, n) {
 			t.Errorf("README missing %q", n)
 		}
+	}
+	if strings.Contains(text, "Allowlist") || strings.Contains(text, "allowlist:") {
+		t.Error("README should not teach allowlist as the product name")
 	}
 }
 
@@ -49,12 +54,15 @@ func TestREADMEPortuguese(t *testing.T) {
 		"/cqb-setup",
 		"Uso rápido",
 		"Glossário",
+		"lista de rigor",
+		"strict_paths",
 		"lista do que o CQB ignora",
-		"red_allowlist",
 		"prefix",
 		"services/billing",
 		"globs.txt",
 		"README.md",
+		"cqb.yaml",
+		"--mode review",
 	} {
 		if !strings.Contains(text, n) {
 			t.Errorf("README.pt-BR.md missing %q", n)

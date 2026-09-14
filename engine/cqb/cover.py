@@ -1,4 +1,4 @@
-"""Cover slot: allowlist only. Empty allowlist → skip. Hook never rewrites the baseline."""
+"""Cover slot: production Go in the diff. Red only on strict paths. Hook never rewrites the baseline."""
 
 from __future__ import annotations
 
@@ -22,9 +22,8 @@ def _parse_coverprofile(text: str) -> dict[str, tuple[int, int]]:
     for line in text.splitlines():
         if line.startswith("mode:") or not line.strip():
             continue
-        # path:start.line,start.col,end.line,end.col numstmts count
         try:
-            loc, rest = line.rsplit(" ", 2)[0], line.split()
+            rest = line.split()
             if len(rest) < 3:
                 continue
             numstmts = int(rest[-2])
@@ -41,9 +40,14 @@ def _parse_coverprofile(text: str) -> dict[str, tuple[int, int]]:
     return out
 
 
+def _production_go(diff_files: list[str]) -> list[str]:
+    return [f for f in diff_files if f.endswith(".go") and not f.endswith("_test.go")]
+
+
 def evaluate_cover(
     *,
-    allowlist: list[str],
+    strict_paths: list[str] | None = None,
+    allowlist: list[str] | None = None,
     diff_files: list[str],
     coverprofile: str | None,
     baseline_path: Path | None,
@@ -56,16 +60,10 @@ def evaluate_cover(
     if rewrite_baseline:
         # Constitution: the hook/run path must not rewrite. Callers pass False.
         raise AssertionError("cover baseline must not be rewritten by the gate run")
-    if not allowlist:
-        return CoverResult(color="skip", reason="empty red allowlist", files=[])
-
-    scoped = [
-        f
-        for f in diff_files
-        if matches_globs(f, allowlist, prefixes=prefixes) and f.endswith(".go") and not f.endswith("_test.go")
-    ]
-    if not scoped:
-        return CoverResult(color="skip", reason="no allowlist production files in diff", files=[])
+    paths = strict_paths if strict_paths is not None else (allowlist or [])
+    prod = _production_go(diff_files)
+    if not prod:
+        return CoverResult(color="skip", reason="no production Go in diff", files=[])
     # Missing profile is 0% (invocation / I/O floor still apply). Never yellow for "no flag".
     if not coverprofile:
         coverprofile = "mode: set\n"
@@ -82,8 +80,7 @@ def evaluate_cover(
     red = False
     yellow = False
     stale = False
-    for rel in scoped:
-        # coverprofile paths may be module-qualified; match by suffix
+    for rel in prod:
         hit = None
         for k, v in stats.items():
             if k.endswith(rel) or k.endswith("/" + rel) or rel.endswith(k):
@@ -92,28 +89,33 @@ def evaluate_cover(
         covered, total = hit if hit else (0, 0)
         pct = (100.0 * covered / total) if total else 0.0
         is_io = rel in io_files or any(rel.endswith(x) or x.endswith(rel) for x in io_files)
-        rec = {"file": rel, "pct": round(pct, 1), "io": is_io}
+        rec: dict = {"file": rel, "pct": round(pct, 1), "io": is_io}
+        issue = ""
         if is_io and pct < io_floor:
-            rec["issue"] = f"I/O cover {pct:.1f}% < {io_floor}%"
-            red = True
+            issue = f"I/O cover {pct:.1f}% < {io_floor}%"
         elif not is_io and rel not in invoked_pure:
-            rec["issue"] = "pure helper on allowlist lacks invoking test"
-            red = True
+            issue = "pure helper lacks invoking test"
         prev = baseline.get(rel)
         if prev is not None:
             if pct + 0.05 < float(prev):
-                rec["issue"] = f"ratchet: {pct:.1f}% < baseline {prev}"
-                red = True
+                issue = f"ratchet: {pct:.1f}% < baseline {prev}"
             elif pct > float(prev) + 0.5:
                 rec["stale_baseline"] = True
                 yellow = True
                 stale = True
+        on_strict = bool(paths) and matches_globs(rel, paths, prefixes=prefixes)
+        if issue:
+            rec["issue"] = issue
+            if on_strict:
+                red = True
+            else:
+                yellow = True
         details.append(rec)
 
     if red:
-        return CoverResult(color="red", reason="allowlist cover below floor or ratchet", files=details)
+        return CoverResult(color="red", reason="strict-path cover below floor or ratchet", files=details)
     if stale:
         return CoverResult(color="yellow", reason="stale cover baseline (real cover higher than recorded)", files=details)
     if yellow:
         return CoverResult(color="yellow", reason="cover incomplete", files=details)
-    return CoverResult(color="green", reason="allowlist cover ok", files=details)
+    return CoverResult(color="green", reason="cover ok", files=details)

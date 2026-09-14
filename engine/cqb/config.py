@@ -152,7 +152,6 @@ class Config:
     prefixes: list[str] = field(default_factory=list)
     operator_language: str = "pt-BR"
     complexity: Complexity = field(default_factory=Complexity)
-    red_allowlist: list[str] = field(default_factory=list)
     testable: Testable = field(default_factory=Testable)
     io_imports: list[str] = field(
         default_factory=lambda: ["database/sql", "net/http", "os"]
@@ -161,6 +160,12 @@ class Config:
     e2e: E2E = field(default_factory=E2E)
     cover: Cover = field(default_factory=Cover)
     ignored_keys: list[str] = field(default_factory=list)
+    strict_paths: list[str] = field(default_factory=list)
+
+    @property
+    def red_allowlist(self) -> list[str]:
+        """Deprecated alias for tests and older call sites."""
+        return self.strict_paths
 
     def prefix_list(self) -> list[str]:
         out: list[str] = []
@@ -204,9 +209,12 @@ def parse_config(text: str) -> Config:
             nested_if=int(cx.get("nested_if", DEFAULT_CEILINGS["nested_if"])),
             delta=int(cx.get("delta", DEFAULT_CEILINGS["delta"])),
         )
-    allow = raw.get("red_allowlist") or []
-    if isinstance(allow, list):
-        cfg.red_allowlist = [str(x) for x in allow]
+    if "strict_paths" in raw:
+        allow = raw.get("strict_paths")
+        cfg.strict_paths = [str(x) for x in allow] if isinstance(allow, list) else []
+    elif "red_allowlist" in raw:
+        allow = raw.get("red_allowlist")
+        cfg.strict_paths = [str(x) for x in allow] if isinstance(allow, list) else []
     tes = raw.get("testable") or {}
     if isinstance(tes, dict):
         inc = tes.get("include")

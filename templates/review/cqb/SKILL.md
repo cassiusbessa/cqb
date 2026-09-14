@@ -12,12 +12,28 @@ description: >-
 Operator-facing language: **pt-BR**. Hunter prompts MAY stay in English.
 Never paste the raw JSON bundle into the chat.
 
+`/cqb` **runs** `cqb run` and then interprets `.quality/last.json`. The
+operator does not need to type `cqb run` first. The CLI remains for the
+terminal and the hook.
+
 ## Gather
 
-1. Write a unified diff of the requested mode (`uncommitted` / `staged` / SHAs) to a temp file.
-2. Read `cqb.yaml`. If the diff touches a configured `prefix`, start `cqb run` **in the same mode** in the background, writing `.quality/last.json`. Set a running flag (for example `.quality/running`) and clear it when the process exits.
-3. If the diff does **not** touch any prefix, do not start `cqb run`. `{quality_bundle}` stays empty. Verification-gap MUST NOT wait.
-4. Classify the target: Go/code diff → code layers. Spec/proposal markdown with no code → editorial lenses only. Do not invent code triage on prose. Do not install BMAD sprint/story modules.
+1. Read `cqb.yaml`. If the diff does **not** touch any configured `prefix`,
+   do not start `cqb run`. `{quality_bundle}` stays empty. Verification-gap
+   MUST NOT wait.
+2. Unless the operator asked for `uncommitted`, `staged`, `push`, or a file
+   list, start `cqb run --mode review --output .quality/last.json` in the
+   background. Set a running flag (for example `.quality/running`) and clear
+   it when the process exits.
+3. If that command fails because the review base is **ambiguous** (it asks
+   for `--base`), **STOP and ask** which git ref to compare. Then re-run
+   `cqb run --mode review --base <ref> --output .quality/last.json`.
+   MUST NOT silently diff the working tree against `HEAD`.
+4. If the operator asked only for uncommitted / working-tree files, use
+   default `cqb run` (working tree versus `HEAD`) instead of `--mode review`.
+5. Classify the target: Go/code diff → code layers. Spec/proposal markdown
+   with no code → editorial lenses only. Do not invent code triage on prose.
+   Do not install BMAD sprint/story modules.
 
 ## Layers (code diff, in parallel)
 
@@ -38,7 +54,7 @@ Classify each finding: `patch` / `defer` / `decision_needed` / `rejected`.
 
 - Defer findings whose fix is to edit agent-context (AGENTS.md, rules, other specs).
 - Defer issues the loaded OpenSpec pack already accepted (non-goal or explicit risk) unless this change enlarged the hole.
-- A missing `Test<Symbol>` that **invokes** a **new** symbol on a testable path MUST NOT be `defer` only because the repo "has almost no suite". Outside the red allowlist that signal is yellow; on the allowlist it is red. Legacy missing tests remain eligible for `defer`.
+- A missing `Test<Symbol>` that **invokes** a **new** symbol on a testable path MUST NOT be `defer` only because the repo "has almost no suite". Off the strict-paths list that signal is yellow; on the list it is red. Legacy missing tests remain eligible for `defer`.
 - Consumer glob rule wins on style (for example sequential `if err != nil` in HTTP handlers) when it matches the path.
 
 ## Present (always in this order)

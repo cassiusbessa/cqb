@@ -18,13 +18,24 @@ def git_show(root: Path, spec: str) -> str | None:
     return r.stdout
 
 
-def added_lines_for_file(root: Path, rel: str, mode: str) -> set[int]:
+def added_lines_for_file(root: Path, rel: str, mode: str, base: str = "") -> set[int]:
     """Line numbers in the *new* file that the diff added."""
     args = ["git", "diff", "-U0"]
     if mode == "staged":
         args += ["--cached", "--", rel]
     elif mode == "push":
         args += ["@{u}...HEAD", "--", rel]
+    elif mode == "review":
+        mb = base
+        rmb = subprocess.run(
+            ["git", "merge-base", "HEAD", base],
+            cwd=root,
+            capture_output=True,
+            text=True,
+        )
+        if rmb.returncode == 0 and rmb.stdout.strip():
+            mb = rmb.stdout.strip()
+        args += [mb or "HEAD", "--", rel]
     else:
         args += ["HEAD", "--", rel]
     r = subprocess.run(args, cwd=root, capture_output=True, text=True)
