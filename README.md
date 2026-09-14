@@ -81,16 +81,17 @@ unit test **does not** exit 1. Broken `gofmt` / `go vet` / `go build`
 This is **not** a skip / ignore list. Paths off it are still checked;
 the warning just does not exit 1.
 
-You **name the folders where a weak unit test or low coverage will exit
-1** — so `/cqb` flags a blocker and, with `CQB=1`, the push stops. It is
-not the set of everything you want tested.
+You **name the folders where a fragile hunter (blind assert, …) or low
+coverage will exit 1** — so `/cqb` flags a blocker and, with `CQB=1`,
+the push stops. A missing `TestFoo` stays yellow; the missing-invocation
+red lives on coverage. It is not the set of everything you want tested.
 
 ```yaml
 # in cqb.yaml
 strict_paths: []                 # default: test/coverage warnings do not exit 1
 
 strict_paths:
-  - "internal/billing/**"        # in this folder, a weak test / low cover WILL exit 1
+  - "internal/billing/**"        # fragile hunter / low cover WILL exit 1; quick test will not
 ```
 
 A **glob** is a path pattern. `internal/billing/**` = everything under
@@ -199,7 +200,8 @@ that and **will not** write yaml unless you agree.
 `TestFoo` **and** does the test body **call** `Foo(`? Missing test or
 missing call → a warning. This is **not** coverage percent and **not**
 the journey `go test`. HTTP handlers (`http.ResponseWriter`) are skipped.
-Empty strict paths → **yellow**; path on the list → **red** (exit 1).
+Always **yellow** — list or not. The missing invocation exits 1 on
+**coverage**, on paths that match the list.
 
 **Test-file checks (hunters)** — fragile patterns, for example:
 
@@ -227,7 +229,7 @@ the baseline file on `cqb run`.
 **Mutation** — extra tool (`gremlins`), **not** the same slot as quick
 test. It only tries to mutate if the new function **already has**
 `TestFoo` that calls `Foo(`. Without that call, mutation is `skip`; the
-missing test is the quick-test slot (yellow or red from strict paths).
+missing test is the quick-test slot (always yellow).
 No `gremlins` on `PATH` → `unavailable`, never red. A surviving mutant →
 **yellow**, never red in v0.1.
 
@@ -361,10 +363,10 @@ Gremlins only feeds the mutation slot, and even then it does not exit 1.
 |---|---|
 | Report | JSON file `.quality/last.json` with a color per check. |
 | Slot | One section of that report (lint, test, e2e, cover, …). |
-| Strict paths (`strict_paths`) | Globs where a test/coverage warning **exits 1** (alerts `/cqb` and, with `CQB=1`, stops the push). Not a skip / ignore list. |
+| Strict paths (`strict_paths`) | Globs where a fragile hunter / coverage warning **exits 1** (alerts `/cqb` and, with `CQB=1`, stops the push). Quick test does not. Not a skip / ignore list. |
 | Glob | Path pattern (`internal/billing/**`, `*invoice*`). Covers a new matching file; not an inventory. |
 | Prefix (`prefix`) | Go module directory, **in `cqb.yaml`**, when it is not the git root. |
-| Quick test | “Does new `Foo` have `TestFoo` that calls `Foo(`?” Not e2e, not %. |
+| Quick test | “Does new `Foo` have `TestFoo` that calls `Foo(`?” Always yellow. Not e2e, not %. |
 | Hunter | Automatic check on a `*_test.go` or a new production line. |
 | Coverage | Percent of code hit by unit tests (`go test -cover`). |
 | E2e | Journey test (`go test -tags e2e`), usually with Docker. |

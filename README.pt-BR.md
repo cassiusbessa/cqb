@@ -80,16 +80,18 @@ teste unitário **não** sai 1. `gofmt` / `go vet` / `go build` quebrados
 A lista de rigor **não** é lista do que o CQB ignora. Paths fora dela
 ainda são checados; o aviso só não sai 1.
 
-Você **nomeia as pastas em que um teste unitário fraco ou cobertura baixa
-sai 1** — e portanto alerta o `/cqb` e, com `CQB=1`, trava o push. Não é
-o conjunto de tudo que você quer testar.
+Você **nomeia as pastas em que um hunter frágil (assert cego, etc.) ou
+cobertura baixa sai 1** — e portanto alerta o `/cqb` e, com `CQB=1`,
+trava o push. Falta de `TestFoo` continua amarela; o vermelho da
+invocação ausente vive na cobertura. Não é o conjunto de tudo que você
+quer testar.
 
 ```yaml
 # em cqb.yaml
 strict_paths: []                 # padrão: aviso de teste/cobertura não sai 1
 
 strict_paths:
-  - "internal/billing/**"        # nesta pasta, teste fraco / cobertura baixa SAI 1
+  - "internal/billing/**"        # hunter frágil / cobertura baixa SAI 1; teste rápido não
 ```
 
 Um **glob** é um padrão de path. `internal/billing/**` = tudo debaixo
@@ -198,8 +200,9 @@ ciclomático, 5 `if` aninhados) ficam **amarelas**. Função antiga: só o
 (padrão: `internal/`, fora de `internal/interface/`): existe um
 `TestFoo` **e** o corpo do teste **chama** `Foo(`? Se falta o teste ou a
 chamada → aviso. Isso *não* é percentual de cobertura e *não* é o teste
-de jornada. Handlers HTTP (`http.ResponseWriter`) ficam de fora. Lista
-de rigor vazia → **amarelo**; path na lista → **vermelho** (sai 1).
+de jornada. Handlers HTTP (`http.ResponseWriter`) ficam de fora. Sempre
+**amarelo** — lista de rigor ou não. Quem sai 1 pela invocação ausente é
+a **cobertura**, nos paths da lista.
 
 **Checagens no `*_test.go` (hunters)** — padrões frágeis, por exemplo:
 
@@ -227,8 +230,7 @@ arquivo de baseline no `cqb run`.
 **Mutação** — ferramenta extra (`gremlins`), **não** é o mesmo que teste
 rápido. Só tenta mutar se a função nova **já tem** `TestFoo` que chama
 `Foo(`. Sem essa chamada, mutação fica `skip`; quem avisa a falta do
-teste é o slot de teste rápido (amarelo ou vermelho conforme a lista de
-rigor). Sem `gremlins` no `PATH` → `unavailable`, nunca vermelho. Mutante
+teste é o slot de teste rápido (**sempre** amarelo). Sem `gremlins` no `PATH` → `unavailable`, nunca vermelho. Mutante
 que sobrevive → **amarelo**, nunca vermelho no v0.1.
 
 ---
@@ -360,10 +362,10 @@ o `/cqb`. Gremlins só entra no slot de mutação, e mesmo assim não sai 1.
 |---|---|
 | Relatório | JSON `.quality/last.json` com as cores de cada verificação. |
 | Slot | Uma seção desse relatório (lint, teste, e2e, cover…). |
-| Lista de rigor (`strict_paths`) | Globs onde aviso de teste/cobertura **sai 1** (alerta o `/cqb` e, com `CQB=1`, para o push). Não é lista do que o CQB ignora. |
+| Lista de rigor (`strict_paths`) | Globs onde hunter frágil / cobertura **sai 1** (alerta o `/cqb` e, com `CQB=1`, para o push). Teste rápido não. Não é lista do que o CQB ignora. |
 | Glob | Padrão de path (`internal/billing/**`, `*invoice*`). Cobre arquivo novo que case; não é inventário. |
 | Prefixo (`prefix`) | Pasta do módulo Go, **no `cqb.yaml`**, quando ela não é a raiz do git. |
-| Teste rápido | “Função nova `Foo` tem `TestFoo` que chama `Foo(`?”. Não é e2e nem %. |
+| Teste rápido | “Função nova `Foo` tem `TestFoo` que chama `Foo(`?”. Sempre amarelo. Não é e2e nem %. |
 | Hunter | Checagem automática num `*_test.go` ou numa linha nova de produção. |
 | Cobertura | Percentual exercitado pelos testes unitários (`go test -cover`). |
 | E2e | Teste de jornada (`go test -tags e2e`), em geral com Docker. |

@@ -275,11 +275,10 @@ def run(root: Path, mode: str, explicit: list[str] | None, extra_cover: str | No
         mut_slot = bundlemod.slot(mut.color, reason=mut.reason, survivors=mut.survivors)
 
     test_slot = bundlemod.slot("skip", reason="package tests are not auto-run in v1 orchestrator (hygiene covers build)")
-    # Quick-test lives under hunters; keep a test slot for bundle shape.
+    # Quick-test lives under hunters; keep a test slot for bundle shape. Always yellow.
     if any(h.hunter == "quick_test" for h in hunter_hits):
         qt = [h for h in hunter_hits if h.hunter == "quick_test"]
-        tcolor = "red" if any(h.color == "red" for h in qt) else "yellow"
-        test_slot = bundlemod.slot(tcolor, reason="missing invoking tests on new symbols", findings=[h.__dict__ for h in qt])
+        test_slot = bundlemod.slot("yellow", reason="missing invoking tests on new symbols", findings=[h.__dict__ for h in qt])
     elif new_tested:
         test_slot = bundlemod.slot("green", reason="new symbols have invoking tests")
 

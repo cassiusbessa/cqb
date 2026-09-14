@@ -14,7 +14,7 @@ Operator language: pt-BR. Do not paste the raw JSON.
 Each slot is `red` | `yellow` | `skip` | `unavailable` | `green`.
 
 - **red** — git exit 1 (gofmt/vet/build; broken e2e catalog; strict-path cover/hunters).
-- **yellow** — never fails git. Complexity over ceiling, missing quick tests off the list, surviving mutants, hunters off the list.
+- **yellow** — never fails git. Complexity over ceiling, missing quick tests, surviving mutants, hunters off the list.
 - **skip** — not applicable (prefix miss, no production Go for cover, no matching e2e suite). Not a pass.
 - **unavailable** — tool missing (python3, docker, gremlins). Not a pass, never green.
 

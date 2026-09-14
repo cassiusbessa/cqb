@@ -8,7 +8,7 @@ Defines the local CQB quality gate: diff-scoped analysis, a color bundle, consti
 
 ### Requirement: Strict paths, not an allowlist
 
-The consumer yaml MUST treat `strict_paths` as the list of path globs where quick-test, content-hunter, and cover findings are red (process exit 1). Paths that do not match, or an empty list, MUST keep those findings yellow or otherwise non-blocking. The list MUST NOT be an ignore list and MUST NOT be inferred from test-file density. The parser MUST NOT treat `red_allowlist` as this list. Operator-facing text in this kit MUST call the list “strict paths” (pt-BR: “lista de rigor”), not “allowlist”.
+The consumer yaml MUST treat `strict_paths` as the list of path globs where content-hunter and cover findings are red (process exit 1). Paths that do not match, or an empty list, MUST keep those findings yellow or otherwise non-blocking. Quick-test findings MUST stay yellow even when the file matches the list; a missing invocation on a matching path MUST be red on the **cover** slot, not the test slot. The list MUST NOT be an ignore list and MUST NOT be inferred from test-file density. The parser MUST NOT treat `red_allowlist` as this list. Operator-facing text in this kit MUST call the list “strict paths” (pt-BR: “lista de rigor”), not “allowlist”.
 
 #### Scenario: Empty list cannot red cover or hunters
 
@@ -24,6 +24,20 @@ The consumer yaml MUST treat `strict_paths` as the list of path globs where quic
 
 - **WHEN** `strict_paths` includes `internal/billing/**` and a new test under that path uses `t.Fatal("short")`
 - **THEN** the hunter slot is red and `cqb run` exits 1
+
+### Requirement: Quick test is advisory; cover holds the red
+
+A missing `TestFoo` that invokes `Foo(` on a new testable symbol MUST be yellow in the test slot, whether or not the path matches `strict_paths`. That finding MUST NOT by itself make `cqb run` exit 1. When the same missing invocation is on a path that matches `strict_paths`, the cover slot MUST be red.
+
+#### Scenario: On-list missing invocation reds cover only
+
+- **WHEN** `strict_paths` includes `internal/billing/**` and the diff adds `NormalizeX` with no calling test
+- **THEN** the test slot is yellow, cover is red, and `cqb run` exits 1
+
+#### Scenario: Off-list missing invocation stays yellow
+
+- **WHEN** `strict_paths` is empty and the diff adds `NormalizeX` with no calling test
+- **THEN** the test slot is yellow, cover is yellow, and `cqb run` exits 0
 
 ### Requirement: Cover runs without filling strict paths
 

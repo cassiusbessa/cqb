@@ -200,7 +200,7 @@ class TestHunters(unittest.TestCase):
         self.assertTrue(hits)
         self.assertEqual(hits[0].color, "yellow")
 
-    def test_quick_test_missing_red_on_allowlist(self):
+    def test_quick_test_missing_stays_yellow_on_strict_paths(self):
         src = "package billing\nfunc NormalizeX(s string) string { return s }\n"
         hits = quick_test_findings(
             rel="internal/billing/normalize.go",
@@ -211,7 +211,7 @@ class TestHunters(unittest.TestCase):
             allowlist=["internal/billing/**"],
             new_func_names=["NormalizeX"],
         )
-        self.assertEqual(hits[0].color, "red")
+        self.assertEqual(hits[0].color, "yellow")
 
     def test_fatal_x_outside_allowlist_is_yellow(self):
         src = textwrap.dedent(
@@ -464,6 +464,34 @@ class TestOrchestratorSkipAndYellow(unittest.TestCase):
             self.assertNotEqual(doc["slots"]["cover"]["color"], "skip")
             self.assertNotEqual(doc["slots"]["cover"]["color"], "red")
             self.assertEqual(doc["slots"]["cover"]["color"], "yellow")
+
+    def test_on_list_missing_invocation_reds_cover_not_test(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "cqb.yaml").write_text(
+                textwrap.dedent(
+                    """
+                    prefix: ""
+                    strict_paths:
+                      - "internal/billing/**"
+                    testable:
+                      include: ["internal/"]
+                      exclude: []
+                    """
+                ),
+                encoding="utf-8",
+            )
+            (root / "go.mod").write_text("module github.com/example/billingapp\n\ngo 1.22\n")
+            pkg = root / "internal" / "billing"
+            pkg.mkdir(parents=True)
+            (pkg / "normalize.go").write_text(
+                "package billing\n\nfunc NormalizeX(s string) string { return s }\n",
+                encoding="utf-8",
+            )
+            code, doc = _run_orch(root, "file-list", "internal/billing/normalize.go")
+            self.assertEqual(doc["slots"]["test"]["color"], "yellow", msg=json.dumps(doc, indent=2))
+            self.assertEqual(doc["slots"]["cover"]["color"], "red", msg=json.dumps(doc, indent=2))
+            self.assertEqual(code, 1)
 
 
 if __name__ == "__main__":

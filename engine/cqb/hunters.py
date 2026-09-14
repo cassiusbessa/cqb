@@ -69,7 +69,8 @@ def quick_test_findings(
                     file=rel,
                     line=fn.sig_line,
                     message=f"new symbol {fn.name} lacks Test{fn.name} that invokes {fn.name}(",
-                    color=_color(rel, allowlist, prefixes),
+                    # Advisory only. Missing invocation on strict paths is red on cover.
+                    color="yellow",
                 )
             )
     return findings

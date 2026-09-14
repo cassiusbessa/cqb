@@ -54,7 +54,7 @@ Classify each finding: `patch` / `defer` / `decision_needed` / `rejected`.
 
 - Defer findings whose fix is to edit agent-context (AGENTS.md, rules, other specs).
 - Defer issues the loaded OpenSpec pack already accepted (non-goal or explicit risk) unless this change enlarged the hole.
-- A missing `Test<Symbol>` that **invokes** a **new** symbol on a testable path MUST NOT be `defer` only because the repo "has almost no suite". Off the strict-paths list that signal is yellow; on the list it is red. Legacy missing tests remain eligible for `defer`.
+- A missing `Test<Symbol>` that **invokes** a **new** symbol on a testable path MUST NOT be `defer` only because the repo "has almost no suite". That signal is yellow in the test slot; on the strict-paths list the blocker is cover (red), not the test slot. Legacy missing tests remain eligible for `defer`.
 - Consumer glob rule wins on style (for example sequential `if err != nil` in HTTP handlers) when it matches the path.
 
 ## Present (always in this order)
