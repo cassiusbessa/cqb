@@ -17,8 +17,8 @@ complexity:
   delta: 5
 strict_paths: []
 # Empty = hunters/cover cannot be red (not an ignore list).
-# After a human names a recorte, e.g. internal/billing/** — those paths MAY fail git.
-# Deprecated alias: red_allowlist (still read if strict_paths is absent).
+# After a human names a recorte, e.g. internal/billing/** — weak tests / low
+# cover there WILL exit 1: /cqb treats it as a blocker and CQB=1 git push stops.
 testable:
   include:
     - "internal/"

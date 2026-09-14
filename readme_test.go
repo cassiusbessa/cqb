@@ -32,6 +32,9 @@ func TestREADMEDocumentsSurface(t *testing.T) {
 		"yellow",
 		"--mode review",
 		"cqb.yaml",
+		"Cursor",
+		"CQB=1 git push",
+		"WILL exit 1",
 	} {
 		if !strings.Contains(text, n) {
 			t.Errorf("README missing %q", n)
@@ -63,6 +66,9 @@ func TestREADMEPortuguese(t *testing.T) {
 		"README.md",
 		"cqb.yaml",
 		"--mode review",
+		"Cursor",
+		"CQB=1 git push",
+		"SAI 1",
 	} {
 		if !strings.Contains(text, n) {
 			t.Errorf("README.pt-BR.md missing %q", n)

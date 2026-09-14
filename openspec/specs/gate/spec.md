@@ -8,24 +8,19 @@ Defines the local CQB quality gate: diff-scoped analysis, a color bundle, consti
 
 ### Requirement: Strict paths, not an allowlist
 
-The consumer yaml MUST treat `strict_paths` as the list of path globs where quick-test, content-hunter, and cover findings MAY be red (process exit 1). Paths that do not match, or an empty list, MUST keep those findings yellow or otherwise non-blocking. The list MUST NOT be an ignore list and MUST NOT be inferred from test-file density. The parser MUST still read `red_allowlist` as an alias for the same list; if both keys are present, `strict_paths` MUST win. Operator-facing text in this kit MUST call the list “strict paths” (pt-BR: “lista de rigor”), not “allowlist”.
+The consumer yaml MUST treat `strict_paths` as the list of path globs where quick-test, content-hunter, and cover findings are red (process exit 1). Paths that do not match, or an empty list, MUST keep those findings yellow or otherwise non-blocking. The list MUST NOT be an ignore list and MUST NOT be inferred from test-file density. The parser MUST NOT treat `red_allowlist` as this list. Operator-facing text in this kit MUST call the list “strict paths” (pt-BR: “lista de rigor”), not “allowlist”.
 
 #### Scenario: Empty list cannot red cover or hunters
 
 - **WHEN** `cqb.yaml` has `strict_paths: []` and the diff adds a pure helper with no unit test plus a `t.Fatal("short")` in a new test
 - **THEN** cover and hunter slots are not red; gofmt/vet/build still apply
 
-#### Scenario: Alias still loads
+#### Scenario: Retired yaml key does not fill the list
 
 - **WHEN** `cqb.yaml` has only `red_allowlist: ["internal/billing/**"]` and no `strict_paths` key
-- **THEN** the gate treats that glob as the strict-paths list
+- **THEN** the effective strict-paths list is empty
 
-#### Scenario: Strict key wins
-
-- **WHEN** `cqb.yaml` has `red_allowlist: ["internal/billing/**"]` and `strict_paths: []`
-- **THEN** the effective list is empty
-
-#### Scenario: On-list hunter may be red
+#### Scenario: On-list hunter is red
 
 - **WHEN** `strict_paths` includes `internal/billing/**` and a new test under that path uses `t.Fatal("short")`
 - **THEN** the hunter slot is red and `cqb run` exits 1

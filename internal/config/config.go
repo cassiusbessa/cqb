@@ -47,7 +47,6 @@ type Config struct {
 	OperatorLanguage string     `yaml:"operator_language"`
 	Complexity       Complexity `yaml:"complexity"`
 	StrictPaths      []string   `yaml:"strict_paths"`
-	RedAllowlist     []string   `yaml:"red_allowlist"`
 	Testable         Testable   `yaml:"testable"`
 	IOImports        []string   `yaml:"io_imports"`
 	ExtraHunters     []string   `yaml:"extra_hunters"`
@@ -62,7 +61,6 @@ func defaults() Config {
 		OperatorLanguage: "pt-BR",
 		Complexity:       Complexity{Cognitive: 30, Cyclomatic: 30, NestedIf: 5, Delta: 5},
 		StrictPaths:      []string{},
-		RedAllowlist:     []string{},
 		Testable: Testable{
 			Include: []string{"internal/"},
 			Exclude: []string{"internal/interface/"},
@@ -102,9 +100,6 @@ func Parse(text []byte) (Config, error) {
 	if cfg.StrictPaths == nil {
 		cfg.StrictPaths = []string{}
 	}
-	if cfg.RedAllowlist == nil {
-		cfg.RedAllowlist = []string{}
-	}
 	if cfg.ExtraHunters == nil {
 		cfg.ExtraHunters = []string{}
 	}
@@ -125,10 +120,6 @@ func Load(path string) (Config, error) {
 func applyStrictPaths(cfg *Config, raw map[string]any) {
 	if _, ok := raw["strict_paths"]; ok {
 		cfg.StrictPaths = stringSlice(raw["strict_paths"])
-		return
-	}
-	if _, ok := raw["red_allowlist"]; ok {
-		cfg.StrictPaths = stringSlice(raw["red_allowlist"])
 	}
 }
 

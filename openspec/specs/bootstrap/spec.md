@@ -27,7 +27,7 @@ Defines first-run install: host tools, vendored engine, optional `/cqb-setup` in
 
 ### Requirement: Setup interviews for strict paths
 
-`/cqb-setup` MUST describe the list as strict paths (pt-BR: lista de rigor). It MUST NOT write `strict_paths` (or the `red_allowlist` alias) without an explicit human confirmation. Without confirmation the list MUST stay empty. It MUST NOT use “allowlist” in new operator-facing copy. Candidates MUST still come from the scan (directories that already have an e2e suite), not from every package that has a test.
+`/cqb-setup` MUST describe the list as strict paths (pt-BR: lista de rigor). It MUST NOT write `strict_paths` without an explicit human confirmation. Without confirmation the list MUST stay empty. It MUST NOT use “allowlist” in new operator-facing copy. Candidates MUST still come from the scan (directories that already have an e2e suite), not from every package that has a test.
 
 #### Scenario: No confirmation leaves an empty list
 

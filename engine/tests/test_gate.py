@@ -50,29 +50,16 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(cfg.strict_paths, [])
         self.assertEqual(cfg.extra_hunters, [])
 
-    def test_strict_paths_wins_over_alias(self):
+    def test_retired_red_allowlist_key_is_ignored(self):
         cfg = parse_config(
             textwrap.dedent(
                 """
                 red_allowlist:
                   - "internal/billing/**"
-                strict_paths: []
                 """
             )
         )
         self.assertEqual(cfg.strict_paths, [])
-
-    def test_red_allowlist_alias(self):
-        cfg = parse_config(
-            textwrap.dedent(
-                """
-                red_allowlist:
-                  - "internal/billing/**"
-                """
-            )
-        )
-        self.assertEqual(cfg.strict_paths, ["internal/billing/**"])
-        self.assertEqual(cfg.red_allowlist, ["internal/billing/**"])
 
     def test_illegal_keys_ignored(self):
         cfg = parse_config(
@@ -410,7 +397,7 @@ class TestOrchestratorSkipAndYellow(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             (root / "cqb.yaml").write_text(
-                'prefix: "services/billing"\nred_allowlist: []\n', encoding="utf-8"
+                'prefix: "services/billing"\nstrict_paths: []\n', encoding="utf-8"
             )
             (root / "services" / "auth").mkdir(parents=True)
             (root / "services" / "auth" / "x.go").write_text("package auth\n", encoding="utf-8")
@@ -432,7 +419,7 @@ class TestOrchestratorSkipAndYellow(unittest.TestCase):
                       cyclomatic: 30
                       nested_if: 5
                       delta: 5
-                    red_allowlist: []
+                    strict_paths: []
                     testable:
                       include: ["internal/"]
                       exclude: []

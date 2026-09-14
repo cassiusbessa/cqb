@@ -162,11 +162,6 @@ class Config:
     ignored_keys: list[str] = field(default_factory=list)
     strict_paths: list[str] = field(default_factory=list)
 
-    @property
-    def red_allowlist(self) -> list[str]:
-        """Deprecated alias for tests and older call sites."""
-        return self.strict_paths
-
     def prefix_list(self) -> list[str]:
         out: list[str] = []
         if self.prefix:
@@ -211,9 +206,6 @@ def parse_config(text: str) -> Config:
         )
     if "strict_paths" in raw:
         allow = raw.get("strict_paths")
-        cfg.strict_paths = [str(x) for x in allow] if isinstance(allow, list) else []
-    elif "red_allowlist" in raw:
-        allow = raw.get("red_allowlist")
         cfg.strict_paths = [str(x) for x in allow] if isinstance(allow, list) else []
     tes = raw.get("testable") or {}
     if isinstance(tes, dict):

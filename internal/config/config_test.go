@@ -14,7 +14,7 @@ complexity:
   cyclomatic: 30
   nested_if: 5
   delta: 5
-red_allowlist: []
+strict_paths: []
 extra_hunters: []
 `))
 	if err != nil {
@@ -45,30 +45,16 @@ complexity:
 	}
 }
 
-func TestStrictPathsWinsOverAlias(t *testing.T) {
+func TestRedAllowlistKeyIsIgnored(t *testing.T) {
 	cfg, err := config.Parse([]byte(`
 red_allowlist:
   - "internal/billing/**"
-strict_paths: []
 `))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(cfg.StrictPaths) != 0 {
-		t.Fatalf("strict_paths must win including empty, got %v", cfg.StrictPaths)
-	}
-}
-
-func TestRedAllowlistAlias(t *testing.T) {
-	cfg, err := config.Parse([]byte(`
-red_allowlist:
-  - "internal/billing/**"
-`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(cfg.StrictPaths) != 1 || cfg.StrictPaths[0] != "internal/billing/**" {
-		t.Fatalf("alias should load into StrictPaths, got %v", cfg.StrictPaths)
+		t.Fatalf("red_allowlist must not load into StrictPaths, got %v", cfg.StrictPaths)
 	}
 }
 

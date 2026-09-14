@@ -27,7 +27,7 @@ def _yaml() -> str:
     return textwrap.dedent(
         """
         prefix: "services/billing"
-        red_allowlist:
+        strict_paths:
           - "internal/application/services/*invoice*"
         testable:
           include:
@@ -223,7 +223,7 @@ class TestNestedBilling(unittest.TestCase):
                 textwrap.dedent(
                     """
                     prefix: "services/billing"
-                    red_allowlist: []
+                    strict_paths: []
                     testable:
                       include: ["internal/"]
                       exclude: []
